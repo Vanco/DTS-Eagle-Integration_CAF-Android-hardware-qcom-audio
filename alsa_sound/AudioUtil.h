@@ -100,6 +100,9 @@ public:
     static bool getHDMIAudioSinkCaps(EDID_AUDIO_INFO*);
     static bool getHDMIAudioSinkCaps(EDID_AUDIO_INFO*, char *hdmiEDIDData);
     static bool isDeviceDisconnectedReceivedHDMICoreDriver();
+    static void create_device_state_notifier_node();
+    static void notify_active_device(int devices);
+    static void remove_device_state_notifier_node();
 
 private:
     static int printFormatFromEDID(unsigned char format);
@@ -114,4 +117,6 @@ private:
     static int32_t getHdmiDispDevFbIndex();
 };
 
+
+#define ROUTE_PATH "/data/dts/route"
 #endif /* ALSA_SOUND_AUDIO_UTIL_H */

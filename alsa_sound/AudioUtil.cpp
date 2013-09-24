@@ -19,7 +19,9 @@
 //#define LOG_NDEBUG 0
 #include <utils/Log.h>
 #include <stdlib.h>
-
+#include <cutils/properties.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include "AudioUtil.h"
 
 int AudioUtil::printFormatFromEDID(unsigned char format) {
@@ -784,4 +786,67 @@ int32_t AudioUtil::getHdmiDispDevFbIndex()
         }
     }
     return index;
+}
+
+void AudioUtil::create_device_state_notifier_node()
+{
+    char prop[PROPERTY_VALUE_MAX];
+    int fd;
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true"))) {
+        ALOGV("create_device_state_notifier_node");
+
+        if ((fd=open(ROUTE_PATH, O_RDONLY)) < 0) {
+            ALOGV("No File exisit");
+        } else {
+            ALOGV("A file with the same name exist. Remove it before creating it");
+            close(fd);
+            remove(ROUTE_PATH);
+        }
+        if ((fd=creat(ROUTE_PATH, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0) {
+            ALOGE("opening device notifier node failed returned");
+            return;
+        }
+        chmod(ROUTE_PATH, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH);
+        ALOGV("opening device notifier node successful");
+        close(fd);
+    }
+}
+
+void AudioUtil::notify_active_device(int devices)
+{
+    char prop[PROPERTY_VALUE_MAX];
+    char buf[1024];
+    int fd;
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true"))) {
+        ALOGV("notify active device : %d", devices);
+        if ((fd=open(ROUTE_PATH, O_TRUNC|O_WRONLY)) < 0) {
+            ALOGV("Write device to notifier node failed");
+        } else {
+            ALOGV("Write device to notifier node successful");
+            snprintf(buf, sizeof(buf), "device=%d;", devices);
+            int n = write(fd, buf, strlen(buf));
+            ALOGV("number of bytes written: %d", n);
+            close(fd);
+        }
+    }
+}
+
+void AudioUtil::remove_device_state_notifier_node()
+{
+    char prop[PROPERTY_VALUE_MAX];
+    int fd;
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true"))) {
+        ALOGV("remove_device_state_node");
+        if ((fd=open(ROUTE_PATH, O_RDONLY)) < 0) {
+            ALOGV("open device notifier node failed");
+        } else {
+            ALOGV("open device notifier node successful");
+            ALOGV("Remove the file");
+            close(fd);
+            remove(ROUTE_PATH);
+        }
+    }
 }
