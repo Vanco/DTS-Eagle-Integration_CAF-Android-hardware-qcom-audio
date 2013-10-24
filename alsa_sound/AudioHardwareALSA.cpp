@@ -14,7 +14,25 @@
  ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
- */
+ **
+ ** This file was modified by DTS, Inc. The portions of the
+ ** code that are surrounded by "DTS..." are copyrighted and
+ ** licensed separately, as follows:
+ **
+ **  (C) 2013 DTS, Inc.
+ **
+ ** Licensed under the Apache License, Version 2.0 (the "License");
+ ** you may not use this file except in compliance with the License.
+ ** You may obtain a copy of the License at
+ **
+ **    http://www.apache.org/licenses/LICENSE-2.0
+ **
+ ** Unless required by applicable law or agreed to in writing, software
+ ** distributed under the License is distributed on an "AS IS" BASIS,
+ ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ ** See the License for the specific language governing permissions and
+ ** limitations under the License
+*/
 
 #include <errno.h>
 #include <stdarg.h>
@@ -356,6 +374,9 @@ AudioHardwareALSA::AudioHardwareALSA() :
     }
 #endif
     mTunnelsUsed = 0;
+#ifdef DTS_EAGLE
+    AudioUtil::create_device_state_notifier_node();
+#endif
 }
 
 AudioHardwareALSA::~AudioHardwareALSA()
@@ -410,7 +431,11 @@ AudioHardwareALSA::~AudioHardwareALSA()
         mListenHw = NULL;
     }
 #endif
+#ifdef DTS_EAGLE
+    AudioUtil::remove_device_state_notifier_node();
+#endif
 }
+
 char* AudioHardwareALSA::getTunnel(bool hifi) {
     char* ret = NULL;
     ALOGV("mTunnelsUsed: 0x%x", mTunnelsUsed);
@@ -640,6 +665,10 @@ bool AudioHardwareALSA::isAnyCallActive() {
     return ret;
 }
 
+#ifdef DTS_EAGLE
+static const char* DTS_EAGLE_STR = DTS_EAGLE_KEY;
+#define DEVICE_NODE "/dev/snd/hwC0D3"
+#endif
 status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
 {
     AudioParameter param = AudioParameter(keyValuePairs);
@@ -656,6 +685,78 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
 
     ALOGV("%s() ,%s", __func__, keyValuePairs.string());
 
+#ifdef DTS_EAGLE
+    char prop[PROPERTY_VALUE_MAX];
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+        int *data = NULL, id, size, offset, count, dts_found = 0;
+        if(!strncmp(DTS_EAGLE_STR, keyValuePairs.string(), strlen(DTS_EAGLE_STR))) {
+            if ((param.getInt(String8("count"), count) == NO_ERROR) && count > 1) {
+                String8 tmp;
+                ALOGI("DTS_EAGLE multi count param detected, count: %d", count);
+                data = new int[count];
+                if (data) {
+                    if(param.get(String8(DTS_EAGLE_STR), tmp) == NO_ERROR) {
+                        int idx = 0, tidx, tcnt = 0;
+                        dts_found = 1;
+                        while(tcnt < count) {
+                            if(tcnt < (count-1)) {
+                                tidx = tmp.find(",", idx);
+                                if(tidx >= 0) {
+                                    sscanf(&tmp.string()[idx], "%i", &data[tcnt]);
+                                } else {
+                                    ALOGE("DTS_EAGLE malformed multi value string.");
+                                    dts_found = 0;
+                                    break;
+                                }
+                            } else {
+                                sscanf(&tmp.string()[idx], "%i", &data[tcnt]);
+                            }
+                            idx = tidx + 1;
+                            tidx = 0;
+                            tcnt++;
+                        }
+                    }
+                } else {
+                    ALOGE("DTS_EAGLE mem alloc for multi count param parse failed.");
+                }
+            } else {
+                data = new int[1];
+                if (param.getInt(String8(DTS_EAGLE_STR), *data) == NO_ERROR) {
+                    dts_found = 1;
+                    count = 1;
+                }
+            }
+
+            if (dts_found &&
+                (param.getInt(String8("id"), id) == NO_ERROR) &&
+                (param.getInt(String8("size"), size) == NO_ERROR) &&
+                (param.getInt(String8("offset"), offset) == NO_ERROR)) {
+                ALOGI("DTS_EAGLE param detected: %s", keyValuePairs.string());
+                dts_eagle_param_desc *t = (dts_eagle_param_desc*)malloc(sizeof(dts_eagle_param_desc) + size);
+                if(t) {
+                    t->id = id;
+                    t->size = size;
+                    t->offset = offset;
+                    t->target = 0;
+                    memcpy((void*)((char*)t + sizeof(dts_eagle_param_desc)), data, size);
+                    ALOGD("DTS_EAGLE id: 0x%X, size: %d, offset: %d, target: %d",
+                           t->id, t->size, t->offset, t->target);
+                    setDTSEagleParams(t);
+                    free(t);
+                } else {
+                    ALOGE("DTS_EAGLE mem alloc for dsp structure failed.");
+                }
+            } else {
+                ALOGE("DTS_EAGLE param detected but failed parse: %s", keyValuePairs.string());
+            }
+            if (data)
+                delete(data);
+            return status;
+        }
+    }
+#endif
+
 #ifdef QCOM_ADSP_SSR_ENABLED
     key = String8(AUDIO_PARAMETER_KEY_ADSP_STATUS);
     if (param.get(key, value) == NO_ERROR) {
@@ -667,6 +768,23 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
        if (value == "ONLINE") {
            ALOGV("ADSP online set SSRcomplete");
            mALSADevice->mADSPState = ADSP_UP_AFTER_SSR;
+#ifdef DTS_EAGLE
+           char prop[PROPERTY_VALUE_MAX];
+           property_get("use.dts_eagle", prop, "0");
+           if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+               int fd = open(DEVICE_NODE, O_RDWR);
+               int index = 1;
+               if(fd > 0) {
+                   if(ioctl(fd, DTS_EAGLE_IOCTL_SEND_LICENSE, &index) < 0) {
+                       ALOGE("DTS_EAGLE: error sending license after adsp ssrn\n");
+                   }
+                   ALOGD("DTS_EAGLE: sent license after adsp-ssr\n");
+                   close(fd);
+               } else {
+                   ALOGE("DTS_EAGLE: error opening eagle\n");
+               }
+           }
+#endif
            return status;
        }
        else if (value == "OFFLINE") {
@@ -3430,6 +3548,44 @@ status_t AudioHardwareALSA::setDDPEndpParams(int device)
                  free(ddpEndpParams);
             }
         }
+    }
+    return NO_ERROR;
+}
+#endif
+
+#ifdef DTS_EAGLE
+status_t AudioHardwareALSA::setDTSEagleParams(void* param)
+{
+    bool sent = false;
+    ALOGD("DTS_EAGLE %s", __func__);
+
+    for(ALSAHandleList::iterator it = mDeviceList.begin(); it != mDeviceList.end(); it++) {
+        if (isTunnelUseCase(it->useCase)) {
+            if (it->handle) {
+                 status_t res = mALSADevice->setDTSEagleParams(&(*it), param);
+                 if(res == NO_ERROR)
+                 sent = true;
+            }
+        }
+    }
+    if(!sent) {
+        int fd;
+        ALOGI("DTS_EAGLE: no stream opened, parameters sent directly to cache");
+              ((dts_eagle_param_desc*)param)->target |= ((1<<31) | (1<<30));
+
+        fd = open(DEVICE_NODE, O_RDWR);
+        if(fd > 0) {
+            if(ioctl(fd, DTS_EAGLE_IOCTL_SET_PARAM, param) < 0) {
+                ALOGE("DTS_EAGLE: error sending param\n");
+                return -1;
+            }
+            ALOGD("DTS_EAGLE: sent param\n");
+            close(fd);
+        } else {
+            ALOGE("DTS_EAGLE: error opening eagle\n");
+        }
+    } else {
+        ALOGE("DTS_EAGLE: couldn't open device %s\n", DEVICE_NODE);
     }
     return NO_ERROR;
 }
