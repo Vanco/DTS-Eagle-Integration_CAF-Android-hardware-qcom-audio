@@ -63,8 +63,6 @@
 #include <stdio.h>
 #include <cutils/properties.h>
 
-#include "AudioUtil.h"
-
 namespace android_audio_legacy {
 
 // ----------------------------------------------------------------------------
@@ -218,10 +216,6 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
         }
 
         updateDevicesAndOutputs();
-
-        int ndev = getDeviceForStrategy(STRATEGY_MEDIA, true);
-        ALOGE("setDeviceConnectionState() device: %x", ndev);
-        AudioUtil::notify_active_device(ndev);
 #ifdef QCOM_PROXY_DEVICE_ENABLED
         if (state == AudioSystem::DEVICE_STATE_AVAILABLE &&
                 audio_is_a2dp_device(device) &&

@@ -231,8 +231,7 @@ endif
 
 LOCAL_SRC_FILES := \
     audio_policy_hal.cpp \
-    AudioPolicyManagerALSA.cpp \
-    AudioUtil.cpp
+    AudioPolicyManagerALSA.cpp
 
 ifdef DOLBY_UDC_MULTICHANNEL
   LOCAL_CFLAGS += -DDOLBY_UDC_MULTICHANNEL

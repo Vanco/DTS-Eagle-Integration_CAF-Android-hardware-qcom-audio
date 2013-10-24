@@ -126,7 +126,6 @@ class AudioHardwareALSA;
 #define VSID_KEY            "vsid"
 #define CALL_STATE_KEY      "call_state"
 #define AUDIO_PARAMETER_KEY_FM_VOLUME "fm_volume"
-#define DTS_EAGLE_KEY       "DTS_EAGLE";
 
 
 #define ANC_FLAG        0x00000001
@@ -485,7 +484,6 @@ public:
                                 int param_id, int param_val);
     status_t setDDPEndpParams(alsa_handle_t *handle, int device, int dev_ch_cap,
                                char *ddpEndpParams, int *length, bool send_params);
-    status_t setDTSEagleParams(alsa_handle_t *handle, void* p);
 #ifdef SEPERATED_AUDIO_INPUT
     void     setInput(int);
 #endif
@@ -1104,7 +1102,6 @@ private:
     uint32_t     useCaseStringToEnum(const char *usecase);
     void         switchExtOut(int device);
     status_t     setDDPEndpParams(int device);
-    status_t     setDTSEagleParams(void* p);
     void         parseDDPParams(int ddp_dev, int ddp_ch_cap, AudioParameter *param);
     unsigned int mTunnelsUsed;
     char*        getTunnel(bool hifi);

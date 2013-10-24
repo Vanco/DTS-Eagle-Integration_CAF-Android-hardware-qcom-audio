@@ -356,7 +356,6 @@ AudioHardwareALSA::AudioHardwareALSA() :
     }
 #endif
     mTunnelsUsed = 0;
-    AudioUtil::create_device_state_notifier_node();
 }
 
 AudioHardwareALSA::~AudioHardwareALSA()
@@ -411,7 +410,6 @@ AudioHardwareALSA::~AudioHardwareALSA()
         mListenHw = NULL;
     }
 #endif
-    AudioUtil::remove_device_state_notifier_node();
 }
 char* AudioHardwareALSA::getTunnel(bool hifi) {
     char* ret = NULL;
@@ -642,7 +640,6 @@ bool AudioHardwareALSA::isAnyCallActive() {
     return ret;
 }
 
-static const char* DTS_EAGLE = "DTS_EAGLE";
 status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
 {
     AudioParameter param = AudioParameter(keyValuePairs);
@@ -658,77 +655,6 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     float fm_volume;
 
     ALOGV("%s() ,%s", __func__, keyValuePairs.string());
-
-    char prop[PROPERTY_VALUE_MAX];
-    property_get("use.dts_eagle", prop, "0");
-    if (!strncmp("true", prop, 4)) {
-        int *data = NULL, id, size, offset, count, dts_found = 0;
-        if(!strncmp(DTS_EAGLE, keyValuePairs.string(), strlen(DTS_EAGLE))) {
-            if ((param.getInt(String8("count"), count) == NO_ERROR) && count > 1) {
-                String8 tmp;
-                data = new int[count];
-                ALOGI("DTS_EAGLE multi count param detected, count: %d", count);
-                if(param.get(String8(DTS_EAGLE), tmp) == NO_ERROR) {
-                    int idx = 0, tidx, tcnt = 0;
-                    dts_found = 1;
-                    while(tcnt < count) {
-                        if(tcnt < (count-1)) {
-                            tidx = tmp.find(",", idx);
-                            if(tidx >= 0) {
-                                sscanf(&tmp.string()[idx], "%i", &data[tcnt]);
-                            } else {
-                                ALOGE("DTS_EAGLE malformed multi value string.");
-                                dts_found = 0;
-                                break;
-                            }
-                        } else {
-                            sscanf(&tmp.string()[idx], "%i", &data[tcnt]);
-                        }
-                        idx = tidx + 1;
-                        tidx = 0;
-                        tcnt++;
-                    }
-                }
-            } else {
-                data = new int[1];
-                if (param.getInt(String8(DTS_EAGLE), *data) == NO_ERROR) {
-                    dts_found = 1;
-                    count = 1;
-                }
-            }
-
-            if (dts_found &&
-                (param.getInt(String8("id"), id) == NO_ERROR) &&
-                (param.getInt(String8("size"), size) == NO_ERROR) &&
-                (param.getInt(String8("offset"), offset) == NO_ERROR)) {
-                ALOGI("DTS_EAGLE param detected: %s", keyValuePairs.string());
-                dts_eagle_param_desc *t = (dts_eagle_param_desc*)
-                                           malloc(sizeof(dts_eagle_param_desc) + (size * count));
-                if(t) {
-                    t->id = id;
-                    t->size = size;
-                    t->offset = offset;
-                    t->target = 0;
-                    memcpy((void*)((char*)t + sizeof(dts_eagle_param_desc)),
-                           data, size * count);
-                    ALOGD("DTS_EAGLE id: 0x%X, size: %d, offset: %d, target: %d",
-                           t->id, t->size, t->offset, t->target);
-                    for(int i = 0; i < count; i++) {
-                        ALOGD("DTS_EAGLE data index %i = %i", i, data[i]);
-                    }
-                    setDTSEagleParams(t);
-                    free(t);
-                } else {
-                    ALOGE("DTS_EAGLE mem alloc failed");
-                }
-            } else {
-                ALOGE("DTS_EAGLE param detected but failed parse: %s", keyValuePairs.string());
-            }
-            if (data)
-                delete(data);
-            return status;
-        }
-    }
 
 #ifdef QCOM_ADSP_SSR_ENABLED
     key = String8(AUDIO_PARAMETER_KEY_ADSP_STATUS);
@@ -3508,40 +3434,5 @@ status_t AudioHardwareALSA::setDDPEndpParams(int device)
     return NO_ERROR;
 }
 #endif
-
-#define DEVICE_NODE "/dev/snd/hwC0D3"
-status_t AudioHardwareALSA::setDTSEagleParams(void* param)
-{
-    bool sent = false;
-    ALOGD("DTS_EAGLE %s", __func__);
-
-    for(ALSAHandleList::iterator it = mDeviceList.begin(); it != mDeviceList.end(); it++) {
-        if (isTunnelUseCase(it->useCase)) {
-            if (it->handle) {
-                 status_t res = mALSADevice->setDTSEagleParams(&(*it), param);
-                 if(res == NO_ERROR)
-                 sent = true;
-            }
-        }
-    }
-    if(!sent) {
-        int fd;
-        ALOGI("DTS_EAGLE: no stream opened, parameters sent directly to cache");
-              ((dts_eagle_param_desc*)param)->target |= ((1<<31) | (1<<30));
-
-        fd = open(DEVICE_NODE, O_RDWR);
-        if(fd > 0) {
-            if(ioctl(fd, DTS_EAGLE_IOCTL_SET_PARAM, param) < 0) {
-                ALOGE("DTS_EAGLE: error sending param\n");
-                return -1;
-            }
-            close(fd);
-        }
-        ALOGD("DTS_EAGLE: sent param\n");
-    } else {
-        ALOGE("DTS_EAGLE: couldn't open device %s\n", DEVICE_NODE);
-    }
-    return NO_ERROR;
-}
 
 }       // namespace android_audio_legacy

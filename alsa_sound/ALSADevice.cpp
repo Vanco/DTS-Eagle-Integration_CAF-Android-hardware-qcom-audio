@@ -1651,13 +1651,12 @@ status_t ALSADevice::route(alsa_handle_t *handle, uint32_t devices, int mode)
 
     ALOGD("route: devices 0x%x in mode %d", devices, mode);
     mCallMode = mode;
-    if (devices) {
 #ifdef QCOM_DS1_DOLBY_DAP
+    if (devices) {
         setEndpDevice(devices);
         setDMID();
-#endif
-        AudioUtil::notify_active_device(devices);
     }
+#endif
     switchDevice(handle, devices, mode);
     return status;
 }
@@ -3168,16 +3167,6 @@ status_t ALSADevice::updateDDPEndpTable(int device, int dev_ch_cap,
     }
     ALOGV("mDDPEndpParams[%d].param_val[%d] = %d", idx, param_idx, param_val);
     mDDPEndpParams[idx].param_val[param_idx] = param_val;
-    return NO_ERROR;
-}
-
-status_t ALSADevice::setDTSEagleParams(alsa_handle_t *handle, void* param)
-{
-    ALOGD("ALSADevice::ssetDTSEagleParams");
-    if (ioctl(handle->handle->fd, SNDRV_COMPRESS_SET_DTS_EAGLE_PARAM, param)) {
-        ALOGE("DTS_EAGLE preprocess ioctl failed - Error no %d \n", errno);
-        return -errno;
-    }
     return NO_ERROR;
 }
 
