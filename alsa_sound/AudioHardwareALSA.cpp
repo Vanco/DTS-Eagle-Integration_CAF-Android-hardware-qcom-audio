@@ -642,7 +642,7 @@ bool AudioHardwareALSA::isAnyCallActive() {
     return ret;
 }
 
-static const char* DTS_EAGLE = DTS_EAGLE_KEY;
+static const char* DTS_EAGLE = "DTS_EAGLE";
 status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
 {
     AudioParameter param = AudioParameter(keyValuePairs);
@@ -666,32 +666,28 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         if(!strncmp(DTS_EAGLE, keyValuePairs.string(), strlen(DTS_EAGLE))) {
             if ((param.getInt(String8("count"), count) == NO_ERROR) && count > 1) {
                 String8 tmp;
-                ALOGI("DTS_EAGLE multi count param detected, count: %d", count);
                 data = new int[count];
-                if (data) {
-                    if(param.get(String8(DTS_EAGLE), tmp) == NO_ERROR) {
-                        int idx = 0, tidx, tcnt = 0;
-                        dts_found = 1;
-                        while(tcnt < count) {
-                            if(tcnt < (count-1)) {
-                                tidx = tmp.find(",", idx);
-                                if(tidx >= 0) {
-                                    sscanf(&tmp.string()[idx], "%i", &data[tcnt]);
-                                } else {
-                                    ALOGE("DTS_EAGLE malformed multi value string.");
-                                    dts_found = 0;
-                                    break;
-                                }
-                            } else {
+                ALOGI("DTS_EAGLE multi count param detected, count: %d", count);
+                if(param.get(String8(DTS_EAGLE), tmp) == NO_ERROR) {
+                    int idx = 0, tidx, tcnt = 0;
+                    dts_found = 1;
+                    while(tcnt < count) {
+                        if(tcnt < (count-1)) {
+                            tidx = tmp.find(",", idx);
+                            if(tidx >= 0) {
                                 sscanf(&tmp.string()[idx], "%i", &data[tcnt]);
+                            } else {
+                                ALOGE("DTS_EAGLE malformed multi value string.");
+                                dts_found = 0;
+                                break;
                             }
-                            idx = tidx + 1;
-                            tidx = 0;
-                            tcnt++;
+                        } else {
+                            sscanf(&tmp.string()[idx], "%i", &data[tcnt]);
                         }
+                        idx = tidx + 1;
+                        tidx = 0;
+                        tcnt++;
                     }
-                } else {
-                    ALOGE("DTS_EAGLE mem alloc for multi count param parse failed.");
                 }
             } else {
                 data = new int[1];
@@ -706,19 +702,24 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
                 (param.getInt(String8("size"), size) == NO_ERROR) &&
                 (param.getInt(String8("offset"), offset) == NO_ERROR)) {
                 ALOGI("DTS_EAGLE param detected: %s", keyValuePairs.string());
-                dts_eagle_param_desc *t = (dts_eagle_param_desc*)malloc(sizeof(dts_eagle_param_desc) + size);
+                dts_eagle_param_desc *t = (dts_eagle_param_desc*)
+                                           malloc(sizeof(dts_eagle_param_desc) + (size * count));
                 if(t) {
                     t->id = id;
                     t->size = size;
                     t->offset = offset;
                     t->target = 0;
-                    memcpy((void*)((char*)t + sizeof(dts_eagle_param_desc)), data, size);
+                    memcpy((void*)((char*)t + sizeof(dts_eagle_param_desc)),
+                           data, size * count);
                     ALOGD("DTS_EAGLE id: 0x%X, size: %d, offset: %d, target: %d",
                            t->id, t->size, t->offset, t->target);
+                    for(int i = 0; i < count; i++) {
+                        ALOGD("DTS_EAGLE data index %i = %i", i, data[i]);
+                    }
                     setDTSEagleParams(t);
                     free(t);
                 } else {
-                    ALOGE("DTS_EAGLE mem alloc for dsp structure failed.");
+                    ALOGE("DTS_EAGLE mem alloc failed");
                 }
             } else {
                 ALOGE("DTS_EAGLE param detected but failed parse: %s", keyValuePairs.string());
