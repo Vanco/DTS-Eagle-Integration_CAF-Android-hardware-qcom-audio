@@ -14,25 +14,7 @@
  ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
- **
- ** This file was modified by DTS, Inc. The portions of the
- ** code that are surrounded by "DTS..." are copyrighted and
- ** licensed separately, as follows:
- **
- **  (C) 2013 DTS, Inc.
- **
- ** Licensed under the Apache License, Version 2.0 (the "License");
- ** you may not use this file except in compliance with the License.
- ** You may obtain a copy of the License at
- **
- **    http://www.apache.org/licenses/LICENSE-2.0
- **
- ** Unless required by applicable law or agreed to in writing, software
- ** distributed under the License is distributed on an "AS IS" BASIS,
- ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- ** See the License for the specific language governing permissions and
- ** limitations under the License
-*/
+ */
 
 #ifndef ANDROID_AUDIO_HARDWARE_ALSA_H
 #define ANDROID_AUDIO_HARDWARE_ALSA_H
@@ -144,9 +126,6 @@ class AudioHardwareALSA;
 #define VSID_KEY            "vsid"
 #define CALL_STATE_KEY      "call_state"
 #define AUDIO_PARAMETER_KEY_FM_VOLUME "fm_volume"
-#ifdef DTS_EAGLE
-#define DTS_EAGLE_KEY       "DTS_EAGLE"
-#endif
 
 
 #define ANC_FLAG        0x00000001
@@ -505,9 +484,6 @@ public:
                                 int param_id, int param_val);
     status_t setDDPEndpParams(alsa_handle_t *handle, int device, int dev_ch_cap,
                                char *ddpEndpParams, int *length, bool send_params);
-#ifdef DTS_EAGLE
-    status_t setDTSEagleParams(alsa_handle_t *handle, void* p);
-#endif
 #ifdef SEPERATED_AUDIO_INPUT
     void     setInput(int);
 #endif
@@ -1126,9 +1102,6 @@ private:
     uint32_t     useCaseStringToEnum(const char *usecase);
     void         switchExtOut(int device);
     status_t     setDDPEndpParams(int device);
-#ifdef DTS_EAGLE
-    status_t     setDTSEagleParams(void* p);
-#endif
     void         parseDDPParams(int ddp_dev, int ddp_ch_cap, AudioParameter *param);
     unsigned int mTunnelsUsed;
     char*        getTunnel(bool hifi);

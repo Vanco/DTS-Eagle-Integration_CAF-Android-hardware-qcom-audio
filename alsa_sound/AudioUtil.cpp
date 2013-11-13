@@ -13,39 +13,14 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- ** This file was modified by DTS, Inc. The portions of the
- ** code that are surrounded by "DTS..." are copyrighted and
- ** licensed separately, as follows:
- **
- **  (C) 2013 DTS, Inc.
- **
- ** Licensed under the Apache License, Version 2.0 (the "License");
- ** you may not use this file except in compliance with the License.
- ** You may obtain a copy of the License at
- **
- **    http://www.apache.org/licenses/LICENSE-2.0
- **
- ** Unless required by applicable law or agreed to in writing, software
- ** distributed under the License is distributed on an "AS IS" BASIS,
- ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- ** See the License for the specific language governing permissions and
- ** limitations under the License
-*/
+ */
 
 #define LOG_TAG "AudioUtil"
 //#define LOG_NDEBUG 0
 #include <utils/Log.h>
 #include <stdlib.h>
-#include <cutils/properties.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include "AudioUtil.h"
 
-#ifdef DTS_EAGLE
-int32_t AudioUtil::mDevices = 0;
-int32_t AudioUtil::mCurrDevice = 0;
-#endif
+#include "AudioUtil.h"
 
 int AudioUtil::printFormatFromEDID(unsigned char format) {
     switch (format) {
@@ -810,76 +785,3 @@ int32_t AudioUtil::getHdmiDispDevFbIndex()
     }
     return index;
 }
-
-#ifdef DTS_EAGLE
-void AudioUtil::create_device_state_notifier_node()
-{
-    char prop[PROPERTY_VALUE_MAX];
-    int fd;
-    property_get("use.dts_eagle", prop, "0");
-    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-        ALOGV("create_device_state_notifier_node");
-
-        if ((fd=open(ROUTE_PATH, O_RDONLY)) < 0) {
-            ALOGV("No File exisit");
-        } else {
-            ALOGV("A file with the same name exist. Remove it before creating it");
-            close(fd);
-            remove(ROUTE_PATH);
-        }
-        if ((fd=creat(ROUTE_PATH, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0) {
-            ALOGE("opening device notifier node failed returned");
-            return;
-        }
-        chmod(ROUTE_PATH, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH);
-        ALOGV("opening device notifier node successful");
-        close(fd);
-    }
-}
-
-void AudioUtil::notify_devices(int active_device, int devices)
-{
-    char prop[PROPERTY_VALUE_MAX];
-    char buf[1024];
-    int fd;
-    if ((mCurrDevice == active_device) &&
-        (mDevices == devices)) {
-        ALOGV("nothing to update to route node");
-        return;
-    }
-    mDevices = devices;
-    mCurrDevice = active_device;
-    property_get("use.dts_eagle", prop, "0");
-    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-        ALOGV("notify active device : %d all_devices : %d", active_device, devices);
-        mDevices = devices;
-        if ((fd=open(ROUTE_PATH, O_TRUNC|O_WRONLY)) < 0) {
-            ALOGV("Write device to notifier node failed");
-        } else {
-            ALOGV("Write device to notifier node successful");
-            snprintf(buf, sizeof(buf), "device=%d;all_devices=%d", active_device, devices);
-            int n = write(fd, buf, strlen(buf));
-            ALOGV("number of bytes written: %d", n);
-            close(fd);
-        }
-    }
-}
-
-void AudioUtil::remove_device_state_notifier_node()
-{
-    char prop[PROPERTY_VALUE_MAX];
-    int fd;
-    property_get("use.dts_eagle", prop, "0");
-    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-        ALOGV("remove_device_state_node");
-        if ((fd=open(ROUTE_PATH, O_RDONLY)) < 0) {
-            ALOGV("open device notifier node failed");
-        } else {
-            ALOGV("open device notifier node successful");
-            ALOGV("Remove the file");
-            close(fd);
-            remove(ROUTE_PATH);
-        }
-    }
-}
-#endif

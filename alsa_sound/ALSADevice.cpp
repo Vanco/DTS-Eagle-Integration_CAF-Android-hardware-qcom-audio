@@ -14,25 +14,7 @@
  ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
- **
- ** This file was modified by DTS, Inc. The portions of the
- ** code that are surrounded by "DTS..." are copyrighted and
- ** licensed separately, as follows:
- **
- **  (C) 2013 DTS, Inc.
- **
- ** Licensed under the Apache License, Version 2.0 (the "License");
- ** you may not use this file except in compliance with the License.
- ** You may obtain a copy of the License at
- **
- **    http://www.apache.org/licenses/LICENSE-2.0
- **
- ** Unless required by applicable law or agreed to in writing, software
- ** distributed under the License is distributed on an "AS IS" BASIS,
- ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- ** See the License for the specific language governing permissions and
- ** limitations under the License
-*/
+ */
 
 #define LOG_TAG "ALSADevice"
 //#define LOG_NDEBUG 0
@@ -1669,12 +1651,12 @@ status_t ALSADevice::route(alsa_handle_t *handle, uint32_t devices, int mode)
 
     ALOGD("route: devices 0x%x in mode %d", devices, mode);
     mCallMode = mode;
-    if (devices) {
 #ifdef QCOM_DS1_DOLBY_DAP
+    if (devices) {
         setEndpDevice(devices);
         setDMID();
-#endif
     }
+#endif
     switchDevice(handle, devices, mode);
     return status;
 }
@@ -3232,18 +3214,6 @@ status_t ALSADevice::setDDPEndpParams(alsa_handle_t *handle,
             err = -errno;
             return err;
         }
-    }
-    return NO_ERROR;
-}
-#endif
-
-#ifdef DTS_EAGLE
-status_t ALSADevice::setDTSEagleParams(alsa_handle_t *handle, void* param)
-{
-    ALOGD("ALSADevice::ssetDTSEagleParams");
-    if (ioctl(handle->handle->fd, SNDRV_COMPRESS_SET_DTS_EAGLE_PARAM, param)) {
-        ALOGE("DTS_EAGLE preprocess ioctl failed - Error no %d \n", errno);
-        return -errno;
     }
     return NO_ERROR;
 }
