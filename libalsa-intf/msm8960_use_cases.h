@@ -80,6 +80,8 @@ extern "C" {
 #define DEVICE_USB_TX_ACDB_ID                           44// USB_Tx
 #define DEVICE_CAMCORDER_TX_ACDB_ID                     61// CAMCORDER_TX
 #define DEVICE_VOICE_RECOGNITION_ACDB_ID                62// VOICE_RECOGNITION
+#define DEVICE_HANDSET_MONO_LISTEN_LOW_POWER_ACDB_ID    100
+#define DEVICE_HANDSET_MONO_LISTEN_HIGH_POWER_ACDB_ID   127
 
 /* mixer control type */
 #define TYPE_INT            0
@@ -194,7 +196,12 @@ static const char *card_list[] = {
     "snd_soc_apq_Taiko_DB",
     "snd_soc_msm_I2SFusion",
     "snd_soc_msm_Tapan",
+    "snd_soc_msm_TapanLite",
+    "snd_soc_msm_Tapan_SKUF",
+    "snd_soc_msm_TapanLite_SKUF",
     "snd_soc_msm_8x10_wcd",
+    "snd_soc_msm_8x10_wcd_skuab",
+    "snd_soc_msm_8x10_wcd_skuaa",
     "us_soc_msm",
 };
 
@@ -218,7 +225,12 @@ static card_mapping_t card_mapping_list[] = {
     {"snd_soc_apq_Taiko_DB", 0},
     {"snd_soc_msm_I2SFusion", 0},
     {"snd_soc_msm_Tapan", 0},
+    {"snd_soc_msm_TapanLite", 0},
+    {"snd_soc_msm_Tapan_SKUF", 0},
+    {"snd_soc_msm_TapanLite_SKUF", 0},
     {"snd_soc_msm_8x10_wcd", 0},
+    {"snd_soc_msm_8x10_wcd_skuab", 0},
+    {"snd_soc_msm_8x10_wcd_skuaa", 0},
     {"us_soc_msm", 0},
 };
 
@@ -234,6 +246,8 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_VERB_UL_DL_REC      "UL DL REC"
 #define SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_DL	 "Compressed DL REC"
 #define SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_UL_DL      "Compressed UL DL REC"
+#define SND_USE_CASE_VERB_INCALL_DELIVERY      "Incall Delivery"
+#define SND_USE_CASE_VERB_INCALL_DELIVERY2     "Incall Delivery2"
 #define SND_USE_CASE_VERB_HIFI_TUNNEL    "HiFi Tunnel"
 #define SND_USE_CASE_VERB_HIFI_TUNNEL2    "HiFi Tunnel2"
 #define SND_USE_CASE_VERB_HIFI_TUNNEL3    "HiFi Tunnel3"
@@ -251,6 +265,7 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_VERB_SPKR_PROT_TX   "VI Capture"
 #define SND_USE_CASE_VERB_SPKR_CALIB_RX		"Spk Calibration"
 #define SND_USE_CASE_VERB_VOICE2             "Voice2"
+#define SND_USE_CASE_VERB_QCHAT    "QCHAT"
 
 #define SND_USE_CASE_DEV_FM_TX           "FM Tx"
 #define SND_USE_CASE_DEV_ANC_HEADSET     "ANC Headset"
@@ -318,6 +333,7 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_DEV_AANC_LINE          "AANC Line"
 #define SND_USE_CASE_DEV_AANC_DMIC_ENDFIRE  "AANC DMIC Endfire"
 #define SND_USE_CASE_DEV_SPEAKER_PROTECTED	"Speaker Protected"
+#define SND_USE_CASE_DEV_HANDSET_MONO_LISTEN_HIGH_POWER "ListenHandsetMic"
 
 #define SND_USE_CASE_MOD_SPKR_PROT_TX   "VI Capture Mod"
 #define SND_USE_CASE_MOD_PLAY_FM         "Play FM"
@@ -332,6 +348,8 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL    "Capture Voice Uplink Downlink"
 #define SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_DL       "Capture Compressed Voice DL"
 #define SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_UL_DL    "Capture Compressed Voice UL DL"
+#define SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY    "Play Incall Delivery"
+#define SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY2   "Play Incall Delivery2"
 #define SND_USE_CASE_MOD_PLAY_TUNNEL     "Play Tunnel"
 #define SND_USE_CASE_MOD_PLAY_TUNNEL2     "Play Tunnel2"
 #define SND_USE_CASE_MOD_PLAY_TUNNEL3     "Play Tunnel3"
@@ -345,6 +363,7 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_MOD_PLAY_MUSIC3       "Play Music3"
 #define SND_USE_CASE_MOD_PSEUDO_TUNNEL     "Pseudo Tunnel"
 #define SND_USE_CASE_MOD_PLAY_VOICE2             "Play Voice2"
+#define SND_USE_CASE_MOD_PLAY_QCHAT   "Play QCHAT"
 
 /* List utility functions for maintaining enabled devices and modifiers */
 static int snd_ucm_add_ident_to_list(struct snd_ucm_ident_node **head, const char *value);

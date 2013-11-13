@@ -63,6 +63,8 @@ ALSAStreamOps::~ALSAStreamOps()
         }
         mParent->mVoipMicMute = 0;
         mParent->mVoipBitRate = 0;
+        mParent->mVoipEvrcBitRateMin = 0;
+        mParent->mVoipEvrcBitRateMax = 0;
     }
     close();
 
@@ -163,6 +165,7 @@ status_t ALSAStreamOps::set(int      *format,
             case AUDIO_FORMAT_EVRC:
             case AUDIO_FORMAT_EVRCB:
             case AUDIO_FORMAT_EVRCWB:
+            case AUDIO_FORMAT_EVRCNW:
 #endif
                 iformat = *format;
                 break;
@@ -198,8 +201,9 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
 {
     AudioParameter param = AudioParameter(keyValuePairs);
     String8 key = String8(AudioParameter::keyRouting),value;
-    int device;
+    int device, camcorder_enabled;
     status_t err = NO_ERROR;
+    int mMode = mParent->mode();
 
 #ifdef SEPERATED_AUDIO_INPUT
     String8 key_input = String8(AudioParameter::keyInputSource);
@@ -214,22 +218,35 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
 
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore routing if device is 0.
-        ALOGD("setParameters(): keyRouting with device 0x%x", device);
         if(device) {
-            ALOGD("setParameters(): keyRouting with device %#x", device);
-            if (mParent->isExtOutDevice(device)) {
-                mParent->mRouteAudioToExtOut = true;
-                ALOGD("setParameters(): device %#x", device);
-            }
-            err = mParent->doRouting(device);
-            if(err) {
-                ALOGE("doRouting failed = %d",err);
-            }
-            else {
-                mDevices = device;
-            }
+           //Select appropriate input device for camcorder-mode and in-call mode
+           key = String8("camcorder_mode");
+           if (param.getInt(key, camcorder_enabled) == NO_ERROR) {
+               ALOGV("setParameters(): camcorder_enabled %d, camcorder_enabled");
+              if (camcorder_enabled == 1) {
+                  if ((mMode == AudioSystem::MODE_IN_CALL) ||
+                       (mMode == AudioSystem::MODE_IN_COMMUNICATION)) {
+                       ALOGD("Ignoring routing for CAMCORDER recording while in call");
+
+                       return NO_ERROR;
+                  }
+              }
+           } else {
+               ALOGE("setParameters(): keyRouting with device2 %#x", device);
+               if (mParent->isExtOutDevice(device)) {
+                   mParent->mRouteAudioToExtOut = true;
+                   ALOGD("setParameters(): device %#x", device);
+               }
+               char * usecase = (mHandle != NULL)? mHandle->useCase: NULL;
+               err = mParent->doRouting(device,usecase);
+           }
+           if(err) {
+              ALOGE("doRouting failed = %d",err);
+           } else {
+               mDevices = device;
+           }
         } else {
-            ALOGE("must not change mDevices to 0");
+            ALOGV("setParameters(): Ignore routing if device is 0");
         }
         param.remove(key);
     }
@@ -240,7 +257,26 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
             ALOGD("setParameters(): handleFm with device %d", device);
             if(device) {
                 mDevices = device;
+#ifdef RESOURCE_MANAGER
+                uint32_t state = 0;
+                mParent->handleFmConcurrency(device, state);
+                if(state ==  AudioHardwareALSA::CONCURRENCY_ACTIVE) {
+                    err =  mParent->setParameterForConcurrency(
+                            String8("USECASE_FM_PLAYBACK"), state);
+                    if(err != OK) {
+                        ALOGE("Handle FM error");
+                        param.remove(key);
+                        return err;
+                    }
+                }
+#endif
                 mParent->handleFm(device);
+#ifdef RESOURCE_MANAGER
+                if(state ==  AudioHardwareALSA::CONCURRENCY_INACTIVE) {
+                    err =  mParent->setParameterForConcurrency(
+                            String8("USECASE_FM_PLAYBACK"), state);
+                }
+#endif
             }
             param.remove(key);
         } else {
@@ -427,6 +463,7 @@ int ALSAStreamOps::format() const
         case AUDIO_FORMAT_EVRC:
         case AUDIO_FORMAT_EVRCB:
         case AUDIO_FORMAT_EVRCWB:
+        case AUDIO_FORMAT_EVRCNW:
 #endif
             audioSystemFormat = mHandle->format;
             break;
@@ -515,6 +552,8 @@ void ALSAStreamOps::close()
        (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
        mParent->mVoipMicMute = false;
        mParent->mVoipBitRate = 0;
+       mParent->mVoipEvrcBitRateMin = 0;
+       mParent->mVoipEvrcBitRateMax = 0;
        mParent->mVoipInStreamCount = 0;
        mParent->mVoipOutStreamCount = 0;
     }

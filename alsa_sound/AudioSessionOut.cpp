@@ -28,7 +28,7 @@
 #include <dlfcn.h>
 #include <math.h>
 
-#define LOG_TAG "AudioSessionOutALSA"
+#define LOG_TAG "AudioSessionOut"
 //#define LOG_NDEBUG 0
 #define LOG_NDDEBUG 0
 #include <utils/Log.h>
@@ -60,7 +60,7 @@ namespace android_audio_legacy
 #define NUM_FDS 2
 #define KILL_EVENT_THREAD 1
 #define BUFFER_COUNT 4
-#define LPA_BUFFER_SIZE 256*1024
+#define LPA_BUFFER_SIZE 128*1024
 #define TUNNEL_BUFFER_SIZE 240*1024
 #define TUNNEL_METADATA_SIZE 64
 #define MONO_CHANNEL_MODE 1
@@ -132,11 +132,11 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         }
     }
 
-    if (mParent->mALSADevice->mADSPState == ADSP_UP_AFTER_SSR) {
+    if (mParent->mALSADevice->mSndCardState == SND_CARD_UP_AFTER_SSR) {
            // In-case of multiple streams only one stream will be resumed
            // after resetting mADSPState to ADSP_UP with output device routed
-           ALOGD("We are restrting after SSR - Reset ADSP state to ADSP_UP");
-           mParent->mALSADevice->mADSPState = ADSP_UP;
+           ALOGV("We are restarting after SSR - Reset card state to UP");
+           mParent->mALSADevice->mSndCardState = SND_CARD_UP;
     }
 
     //open device based on the type (LPA or Tunnel) and devices
@@ -213,17 +213,17 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
     mStreamVol = lrint((volume * 0x2000)+0.5);
 #endif
 
-    ALOGD("Setting stream volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
+    ALOGV("Setting stream volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
     if(mAlsaHandle && mAlsaHandle->handle) {
-        if(!strcmp(mAlsaHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER) ||
-           !strcmp(mAlsaHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA)) {
-            ALOGD("setLpaVolume(%u)\n", mStreamVol);
-            ALOGD("Setting LPA volume to %d (available range is 0 to 100)\n", mStreamVol);
+        if(!strncmp(mAlsaHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER, sizeof(SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
+           !strncmp(mAlsaHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA, sizeof(SND_USE_CASE_MOD_PLAY_LPA))) {
+            ALOGV("setLpaVolume(%u)\n", mStreamVol);
+            ALOGV("Setting LPA volume to %d (available range is 0 to 100)\n", mStreamVol);
             mAlsaHandle->module->setLpaVolume(mAlsaHandle, mStreamVol);
             return status;
         } else if (isTunnelUseCase(mAlsaHandle->useCase)) {
-            ALOGD("setCompressedVolume(%u)\n", mStreamVol);
-            ALOGD("Setting Compressed volume to %d (available range is 0 to 100)\n", mStreamVol);
+            ALOGV("setCompressedVolume(%u)\n", mStreamVol);
+            ALOGV("Setting Compressed volume to %d (available range is 0 to 100)\n", mStreamVol);
             mAlsaHandle->module->setCompressedVolume(mAlsaHandle, mStreamVol);
             return status;
         }
@@ -248,13 +248,26 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
         }
         ALOGD("openAudioSessionDevice - LPA status =%d", status);
     } else if (type == TUNNEL_MODE) {
+        char* tunnel_usecase = NULL;
         if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
                                             strlen(SND_USE_CASE_VERB_INACTIVE)))) {
             //for hifi use cases
-            status = openDevice(mParent->getTunnel(true), true, devices);
+            tunnel_usecase = mParent->getTunnel(true);
+            if (tunnel_usecase) {
+                status = openDevice(tunnel_usecase, true, devices);
+            } else {
+                ALOGE("openAudioSessionDevice getTunnel(true) failed, return BAD_VALUE:%d",BAD_VALUE);
+                return BAD_VALUE;
+            }
         } else {
             //for other than hifi use cases
-            status = openDevice(mParent->getTunnel(false), false, devices);
+            tunnel_usecase = mParent->getTunnel(false);
+            if (tunnel_usecase) {
+                status = openDevice(tunnel_usecase, false, devices);
+            } else {
+                ALOGE("openAudioSessionDevice getTunnel(false) failed, return BAD_VALUE:%d",BAD_VALUE);
+                return BAD_VALUE;
+            }
         }
         mTunnelMode = true;
     }
@@ -834,10 +847,19 @@ uint32_t AudioSessionOutALSA::latency() const
 {
     // Android wants latency in milliseconds.
     uint32_t latency = mAlsaHandle->latency;
-    if ((mParent->mExtOutStream == mParent->mA2dpStream) && mParent->mExtOutStream != NULL) {
+    if ( ((mParent->mCurRxDevice & AudioSystem::DEVICE_OUT_ALL_A2DP) &&
+         (mParent->mExtOutStream == mParent->mA2dpStream)) &&
+         (mParent->mA2dpStream != NULL) ) {
         uint32_t bt_latency = mParent->mExtOutStream->get_latency(mParent->mExtOutStream);
-        latency += bt_latency*1000;
+        uint32_t proxy_latency = mParent->mALSADevice->avail_in_ms;
+        latency += bt_latency*1000 + proxy_latency*1000;
+        ALOGV("latency = %d, bt_latency = %d, proxy_latency = %d", latency, bt_latency, proxy_latency);
+    } else if( mParent->mCurRxDevice & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)
+               {
+        // Offsetting latency contributed by USB HAL. The value is based on headset I've tested.
+        latency += 500000;
     }
+
     return USEC_TO_MSEC (latency);
 }
 
@@ -855,9 +877,11 @@ status_t AudioSessionOutALSA::dump(int fd, const Vector<String16>& args)
 
 status_t AudioSessionOutALSA::getNextWriteTimestamp(int64_t *timestamp)
 {
+    Mutex::Autolock autoLock(mLock);
     struct snd_compr_tstamp tstamp;
     tstamp.timestamp = -1;
-    if (ioctl(mAlsaHandle->handle->fd, SNDRV_COMPRESS_TSTAMP, &tstamp)){
+    if (mAlsaHandle && mAlsaHandle->handle &&
+        ioctl(mAlsaHandle->handle->fd, SNDRV_COMPRESS_TSTAMP, &tstamp)){
         ALOGE("Failed SNDRV_COMPRESS_TSTAMP\n");
         return UNKNOWN_ERROR;
     } else {
@@ -938,7 +962,6 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
 {
     alsa_handle_t alsa_handle;
     status_t status = NO_ERROR;
-    ALOGV("openDevice: E usecase %s", useCase);
     alsa_handle.module      = mAlsaDevice;
     alsa_handle.bufferSize  = mInputBufferSize;
     alsa_handle.devices     = devices;
@@ -956,14 +979,20 @@ SNDRV_PCM_FORMAT_S16_LE : mFormat);
     alsa_handle.rxHandle    = 0;
     alsa_handle.ucMgr       = mUcMgr;
     alsa_handle.session     = this;
-    strlcpy(alsa_handle.useCase, useCase, sizeof(alsa_handle.useCase));
-
-    mAlsaDevice->route(&alsa_handle, devices, mParent->mode());
-    if (bIsUseCase) {
-        snd_use_case_set(mUcMgr, "_verb", useCase);
+    if (useCase) {
+        ALOGV("openDevice: usecase %s bIsUseCase:%d devices:%x", useCase, bIsUseCase, devices);
+        strlcpy(alsa_handle.useCase, useCase, sizeof(alsa_handle.useCase));
     } else {
-        snd_use_case_set(mUcMgr, "_enamod", useCase);
+        ALOGE("openDevice invalid useCase, return BAD_VALUE:%x",BAD_VALUE);
+        return BAD_VALUE;
     }
+
+    if (bIsUseCase) {
+       snd_use_case_set(mUcMgr, "_verb", useCase);
+    } else {
+       snd_use_case_set(mUcMgr, "_enamod", useCase);
+    }
+    mAlsaDevice->route(&alsa_handle, devices, mParent->mode());
 
     //Set Tunnel or LPA bit if the playback over usb is tunnel or Lpa
     if((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
@@ -1012,10 +1041,10 @@ status_t AudioSessionOutALSA::closeDevice(alsa_handle_t *pHandle)
     ALOGD("closeDevice: useCase %s", pHandle->useCase);
     //TODO: remove from mDeviceList
     if(pHandle) {
-        status = mAlsaDevice->close(pHandle);
-	if (mTunnelMode) {
+        if (mTunnelMode) {
             mParent->freeTunnel(pHandle->useCase);
         }
+        status = mAlsaDevice->close(pHandle);
     }
     return status;
 }
@@ -1036,19 +1065,32 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
                 mParent->mRouteAudioToExtOut = true;
                 ALOGD("setParameters(): device %#x", device);
             }
-            mParent->doRouting(device);
+            char * usecase = (mAlsaHandle != NULL )? mAlsaHandle->useCase: NULL;
+            mParent->doRouting(device,usecase);
         }
         param.remove(key);
     }
-    key = String8(AUDIO_PARAMETER_KEY_ADSP_STATUS);
+    key = String8(AUDIO_PARAMETER_KEY_SND_CARD_STATUS);
     if (param.get(key, value) == NO_ERROR) {
-       if (value == "ONLINE"){
+       ssize_t pos;
+       int cardNumber;
+       String8 cardStatus;
+
+       pos = value.find(",");
+       if (pos <= 0) {
+           ALOGE("%s(), invalid format %s", __func__,keyValuePairs.string());
+           return BAD_VALUE;
+       }
+
+       cardStatus.setTo(value.string(), pos);
+       cardStatus = value.string() + pos + 1;
+       if (cardStatus == "ONLINE"){
            mReachedEOS = true;
            mSkipWrite = true;
            mWriteCv.signal();
            mObserver->postEOS(1);
        }
-       else if (value == "OFFLINE") {
+       else if (cardStatus == "OFFLINE") {
            mParent->mLock.lock();
            requestAndWaitForEventThreadExit();
            mParent->mLock.unlock();
@@ -1108,6 +1150,11 @@ void AudioSessionOutALSA::reset() {
 #ifdef QCOM_USBAUDIO_ENABLED
     mParent->closeUsbPlaybackIfNothingActive();
 #endif
+   if(mAlsaHandle) {
+        ALOGD("closeDevice mAlsaHandle");
+        closeDevice(mAlsaHandle);
+    }
+
     ALOGV("Erase device list");
     for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
             it != mParent->mDeviceList.end(); ++it) {
@@ -1118,8 +1165,6 @@ void AudioSessionOutALSA::reset() {
     }
 
     if(mAlsaHandle) {
-        ALOGD("closeDevice mAlsaHandle");
-        closeDevice(mAlsaHandle);
         mAlsaHandle = NULL;
     }
     mParent->mLock.unlock();

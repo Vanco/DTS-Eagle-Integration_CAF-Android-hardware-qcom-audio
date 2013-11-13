@@ -768,6 +768,7 @@ int pcm_write(struct pcm *pcm, void *data, unsigned count)
 int pcm_read(struct pcm *pcm, void *data, unsigned count)
 {
     struct snd_xferi x;
+    int format = pcm->format;
 
     if (!(pcm->flags & PCM_IN))
         return -EINVAL;
@@ -784,6 +785,9 @@ int pcm_read(struct pcm *pcm, void *data, unsigned count)
     } else {
         x.frames = (count / 4);
     }
+
+    if (format == SNDRV_PCM_FORMAT_S24_LE)
+        x.frames = x.frames/2;
 
     for (;;) {
         if (!pcm->running) {
@@ -890,8 +894,10 @@ static int disable_timer(struct pcm *pcm) {
 
 int pcm_close(struct pcm *pcm)
 {
-    if (pcm == &bad_pcm)
+    if ((pcm == &bad_pcm) || (pcm == NULL)) {
+        ALOGE("pcm_close invalid pcm handle:%p",pcm);
         return 0;
+    }
 
     if (pcm->flags & PCM_MMAP) {
         disable_timer(pcm);
@@ -957,7 +963,7 @@ struct pcm *pcm_open(unsigned flags, char *device)
         strlcat(dname, "D", (sizeof("D")+strlen(dname)));
         tmp = device+5;
         pcm->device_no = atoi(tmp);
-	/* should be safe to assume pcm dev ID never exceed 99 */
+    /* should be safe to assume pcm dev ID never exceed 99 */
         if (pcm->device_no > 9)
             strlcat(dname, tmp, (3+strlen(dname)));
         else
@@ -971,7 +977,7 @@ struct pcm *pcm_open(unsigned flags, char *device)
         strlcat(dname, "D", (sizeof("D")+strlen(dname)));
         tmp = device+5;
         pcm->device_no = atoi(tmp);
-	/* should be safe to assume pcm dev ID never exceed 99 */
+    /* should be safe to assume pcm dev ID never exceed 99 */
         if (pcm->device_no > 9)
             strlcat(dname, tmp, (3+strlen(dname)));
         else
@@ -1029,7 +1035,7 @@ int pcm_set_channel_map(struct pcm *pcm, struct mixer *mixer,
 {
     struct mixer_ctl *ctl;
     char control_name[44]; // max length of name is 44 as defined
-    char device_num[3]; // device number upto 2 digit
+    char device_num[13]; // device number upto 2 digit
     char **set_values;
     int i;
 

@@ -153,6 +153,16 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
                 } else if (!strcmp(mHandle->useCase,SND_USE_CASE_MOD_PLAY_MUSIC)) {
                     strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI,
                             sizeof(mHandle->useCase));
+#ifdef QCOM_INCALL_MUSIC_ENABLED
+                } else if (!strncmp(mHandle->useCase,SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY,
+                    MAX_LEN(mHandle->useCase, SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY))) {
+                    strlcpy(mHandle->useCase, SND_USE_CASE_VERB_INCALL_DELIVERY,
+                            sizeof(mHandle->useCase));
+                } else if (!strncmp(mHandle->useCase,SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY2,
+                    MAX_LEN(mHandle->useCase, SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY2))) {
+                    strlcpy(mHandle->useCase, SND_USE_CASE_VERB_INCALL_DELIVERY2,
+                            sizeof(mHandle->useCase));
+#endif
                 } else if(!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC)) {
                     strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC,
                             sizeof(mHandle->useCase));
@@ -164,6 +174,16 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
                 } else if (!strcmp(mHandle->useCase,SND_USE_CASE_VERB_HIFI)) {
                     strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
                             sizeof(mHandle->useCase));
+#ifdef QCOM_INCALL_MUSIC_ENABLED
+                } else if (!strncmp(mHandle->useCase,SND_USE_CASE_VERB_INCALL_DELIVERY,
+                    MAX_LEN(mHandle->useCase,SND_USE_CASE_VERB_INCALL_DELIVERY))) {
+                    strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY,
+                            sizeof(mHandle->useCase));
+                } else if (!strncmp(mHandle->useCase,SND_USE_CASE_VERB_INCALL_DELIVERY2,
+                    MAX_LEN(mHandle->useCase,SND_USE_CASE_VERB_INCALL_DELIVERY2))) {
+                    strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_INCALL_DELIVERY2,
+                            sizeof(mHandle->useCase));
+#endif
                 } else if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC)) {
                     strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC,
                             sizeof(mHandle->useCase));
@@ -192,6 +212,12 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
             if (!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI) ||
                 !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI2) ||
                 !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC) ||
+#ifdef QCOM_INCALL_MUSIC_ENABLED
+                !strncmp(mHandle->useCase, SND_USE_CASE_VERB_INCALL_DELIVERY,
+                MAX_LEN(mHandle->useCase, SND_USE_CASE_VERB_INCALL_DELIVERY)) ||
+                !strncmp(mHandle->useCase, SND_USE_CASE_VERB_INCALL_DELIVERY2,
+                MAX_LEN(mHandle->useCase, SND_USE_CASE_VERB_INCALL_DELIVERY2)) ||
+#endif
                 !strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) {
                 snd_use_case_set(mHandle->ucMgr, "_verb", mHandle->useCase);
             } else {
@@ -300,18 +326,20 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
                 mHandle->handle = NULL;
                 if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
                   (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
-                     pcm_close(mHandle->rxHandle);
-                     mHandle->rxHandle = NULL;
-                     mHandle->module->startVoipCall(mHandle);
+                    if (mHandle->rxHandle) {
+                        pcm_close(mHandle->rxHandle);
+                        mHandle->rxHandle = NULL;
+                        mHandle->module->startVoipCall(mHandle);
+                    }
                 }
                 else
                 {
-                    if (mParent->mALSADevice->mADSPState == ADSP_UP_AFTER_SSR) {
+                    if (mParent->mALSADevice->mSndCardState == SND_CARD_UP_AFTER_SSR) {
                         ALOGD("SSR Case: Call device switch to apply AMIX controls.");
                         mHandle->module->route(mHandle, mParent->mCurRxDevice  , mParent->mode());
                         // In-case of multiple streams only one stream will be resumed
-                        // after resetting mADSPState to ADSP_UP with output device routed
-                        mParent->mALSADevice->mADSPState = ADSP_UP;
+                        // after resetting mSndCardState to SND_CARD_UP with output device routed
+                        mParent->mALSADevice->mSndCardState = SND_CARD_UP;
 
                         if(mParent->isExtOutDevice(mParent->mCurRxDevice)) {
                            ALOGV("StreamOut write - mRouteAudioToExtOut = %d ", mParent->mRouteAudioToExtOut);
@@ -357,6 +385,7 @@ status_t AudioStreamOutALSA::close()
 {
     Mutex::Autolock autoLock(mParent->mLock);
 
+    String8 useCase;
     ALOGV("close");
     if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
         (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
@@ -378,7 +407,16 @@ status_t AudioStreamOutALSA::close()
              }
              ALOGD(" mVoipInStreamCount= %d, mVoipOutStreamCount=%d",
                    mParent->mVoipInStreamCount, mParent->mVoipOutStreamCount);
-
+#ifdef RESOURCE_MANAGER
+             useCase.setTo("USECASE_VOIP_CALL");
+             if(!mParent->mVoipInStreamCount && !mParent->mVoipOutStreamCount) {
+                 status_t err = mParent->setParameterForConcurrency(
+                         useCase, AudioHardwareALSA::CONCURRENCY_INACTIVE);
+                 if(err != OK) {
+                     return err;
+                 }
+             }
+#endif
              return NO_ERROR;
          }
          mParent->mVoipMicMute = 0;
@@ -416,7 +454,7 @@ status_t AudioStreamOutALSA::standby()
 {
     Mutex::Autolock autoLock(mParent->mLock);
 
-    ALOGV("standby");
+    ALOGV("standby = %s", mHandle->useCase);
 
     if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
       (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
@@ -461,9 +499,17 @@ uint32_t AudioStreamOutALSA::latency() const
 {
     // Android wants latency in milliseconds.
     uint32_t latency = mHandle->latency;
-    if ((mParent->mExtOutStream == mParent->mA2dpStream) && mParent->mExtOutStream != NULL) {
+    if ( ((mParent->mCurRxDevice & AudioSystem::DEVICE_OUT_ALL_A2DP) &&
+         (mParent->mExtOutStream == mParent->mA2dpStream)) &&
+         (mParent->mA2dpStream != NULL) ) {
         uint32_t bt_latency = mParent->mExtOutStream->get_latency(mParent->mExtOutStream);
-        latency += bt_latency*1000;
+        uint32_t proxy_latency = mParent->mALSADevice->avail_in_ms;
+        latency += bt_latency*1000 + proxy_latency*1000;
+        ALOGV("latency = %d, bt_latency = %d, proxy_latency = %d", latency, bt_latency, proxy_latency);
+    } else if( mParent->mCurRxDevice & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)
+               {
+        // Offsetting latency contributed by USB HAL. The value is based on headset I've tested.
+        latency += 300000;
     }
 
     return USEC_TO_MSEC (latency);

@@ -304,7 +304,8 @@ static int process_cmd(char *cmdStr)
                 free((void *)str);
             return err;
         }
-        printf("  %s=%s\n", identifier, str);
+        if (str != NULL)
+            printf("  %s=%s\n", identifier, str);
         free((void *)str);
         break;
 

@@ -41,6 +41,9 @@ public:
         virtual status_t setDeviceConnectionState(audio_devices_t device,
                                                           AudioSystem::device_connection_state state,
                                                           const char *device_address);
+        uint32_t checkDeviceMuteStrategies(AudioOutputDescriptor *outputDesc,
+                                           audio_devices_t prevDevice,
+                                           uint32_t delayMs);
         virtual AudioSystem::device_connection_state getDeviceConnectionState(audio_devices_t device,
                                                                               const char *device_address);
         virtual void setPhoneState(int state);
@@ -156,5 +159,9 @@ private:
 
         void handleNotificationRoutingForStream(AudioSystem::stream_type stream);
         bool platform_is_Fusion3();
+#ifdef RESOURCE_MANAGER
+        void checkAndSuspendOutputs();
+        void checkAndRestoreOutputs();
+#endif
 };
 };
