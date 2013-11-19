@@ -14,24 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- ** This file was modified by DTS, Inc. The portions of the
- ** code that are surrounded by "DTS..." are copyrighted and
- ** licensed separately, as follows:
- **
- **  (C) 2013 DTS, Inc.
- **
- ** Licensed under the Apache License, Version 2.0 (the "License");
- ** you may not use this file except in compliance with the License.
- ** You may obtain a copy of the License at
- **
- **    http://www.apache.org/licenses/LICENSE-2.0
- **
- ** Unless required by applicable law or agreed to in writing, software
- ** distributed under the License is distributed on an "AS IS" BASIS,
- ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- ** See the License for the specific language governing permissions and
- ** limitations under the License
- *
  * This file was modified by Dolby Laboratories, Inc. The portions of the
  * code that are surrounded by "DOLBY..." are copyrighted and
  * licensed separately, as follows:
@@ -80,8 +62,6 @@
 #include <media/mediarecorder.h>
 #include <stdio.h>
 #include <cutils/properties.h>
-
-#include "AudioUtil.h"
 
 namespace android_audio_legacy {
 
@@ -211,6 +191,7 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
 
     // handle output devices
     if (audio_is_output_device(device)) {
+
         //Use QCOM's a2dp and usb audio solution, no need to check here
         /*if (!mHasA2dp && audio_is_a2dp_device(device)) {
             ALOGE("setDeviceConnectionState() invalid A2DP device: %x", device);
@@ -337,26 +318,6 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
         }
 
         updateDevicesAndOutputs();
-#ifdef DTS_EAGLE
-        int ndev = getDeviceForStrategy(STRATEGY_MEDIA, true);
-        ALOGV("setDeviceConnectionState() device: %x", ndev);
-        AudioUtil::notify_devices(ndev, mAvailableOutputDevices);
-        char prop[PROPERTY_VALUE_MAX];
-        property_get("use.dts_eagle", prop, "0");
-        if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-            int fd = open(DEVICE_NODE, O_RDWR);
-            int32_t params[2] = { ndev, 1 /*is primary device*/};
-            if(fd > 0) {
-                if(ioctl(fd, DTS_EAGLE_IOCTL_SET_ACTIVE_DEVICE, &params) < 0) {
-                    ALOGE("DTS_EAGLE: error sending primary device\n");
-                }
-                ALOGD("DTS_EAGLE: sent primary device\n");
-                close(fd);
-            } else {
-                ALOGE("DTS_EAGLE: error opening eagle\n");
-            }
-        }
-#endif
 
         audio_devices_t newDevice = getNewDevice(mPrimaryOutput, false /*fromCache*/);
 #ifdef QCOM_FM_ENABLED
@@ -1081,25 +1042,6 @@ status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
         setDolbySystemProperty(audioOutputDevice);
     }
 #endif // DOLBY_UDC_MULTICHANNEL
-#ifdef DTS_EAGLE
-    int ndev = getDeviceForStrategy(STRATEGY_MEDIA, true);
-    AudioUtil::notify_devices(ndev, mAvailableOutputDevices);
-    char prop[PROPERTY_VALUE_MAX];
-    property_get("use.dts_eagle", prop, "0");
-    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-        int fd = open(DEVICE_NODE, O_RDWR);
-        int32_t params[2] = { ndev, 1 /*is primary device*/};
-        if (fd > 0) {
-            if(ioctl(fd, DTS_EAGLE_IOCTL_SET_ACTIVE_DEVICE, &params) < 0) {
-                ALOGE("DTS_EAGLE: error sending primary device\n");
-            }
-            ALOGD("DTS_EAGLE: sent primary device\n");
-            close(fd);
-        } else {
-            ALOGE("DTS_EAGLE: error opening eagle\n");
-        }
-    }
-#endif
     return NO_ERROR;
 }
 
