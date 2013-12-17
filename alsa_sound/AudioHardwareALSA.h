@@ -1293,6 +1293,10 @@ protected:
 #endif
 public:
     bool mRouteAudioToExtOut;
+#ifdef DTS_EAGLE
+    dts_eagle_param_desc *fade_in_data;
+    dts_eagle_param_desc *fade_out_data;
+#endif
 };
 
 static bool isTunnelUseCase(const char *useCase) {
