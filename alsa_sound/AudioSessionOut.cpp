@@ -319,6 +319,16 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
     }
     bufferAlloc(mAlsaHandle);
     mBufferSize = mAlsaHandle->periodSize;
+#ifdef DTS_EAGLE
+    char prop[PROPERTY_VALUE_MAX];
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+        if (mTunnelMode && (mParent->fade_in_data!=NULL)) {
+            ALOGD("DTS_EAGLE: send fade in data");
+            mParent->mALSADevice->setDTSEagleParams(mAlsaHandle, mParent->fade_in_data);
+        }
+    }
+#endif
     return NO_ERROR;
 }
 
@@ -657,6 +667,16 @@ status_t AudioSessionOutALSA::pause()
 status_t AudioSessionOutALSA::pause_l()
 {
     if (!mPaused) {
+#ifdef DTS_EAGLE
+           char prop[PROPERTY_VALUE_MAX];
+           property_get("use.dts_eagle", prop, "0");
+           if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+               if (mTunnelMode && (mParent->fade_out_data!=NULL)) {
+                   ALOGD("DTS_EAGLE: send fade out data");
+                   mParent->mALSADevice->setDTSEagleParams(mAlsaHandle, mParent->fade_out_data);
+               }
+           }
+#endif
         if (ioctl(mAlsaHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1) < 0) {
             ALOGE("PAUSE failed on use case %s", mAlsaHandle->useCase);
             return UNKNOWN_ERROR;
@@ -669,6 +689,16 @@ status_t AudioSessionOutALSA::resume_l()
 {
     status_t err = NO_ERROR;
     if (mPaused) {
+#ifdef DTS_EAGLE
+           char prop[PROPERTY_VALUE_MAX];
+           property_get("use.dts_eagle", prop, "0");
+           if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+               if (mTunnelMode && (mParent->fade_in_data!=NULL)) {
+                   ALOGD("DTS_EAGLE: send fade in data");
+                   mParent->mALSADevice->setDTSEagleParams(mAlsaHandle, mParent->fade_in_data);
+               }
+           }
+#endif
         if (ioctl(mAlsaHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,0) < 0) {
             ALOGE("Resume failed on use case %s", mAlsaHandle->useCase);
             return UNKNOWN_ERROR;
