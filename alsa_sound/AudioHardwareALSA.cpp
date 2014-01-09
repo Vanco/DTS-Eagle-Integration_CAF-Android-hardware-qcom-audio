@@ -417,8 +417,6 @@ AudioHardwareALSA::AudioHardwareALSA() :
     }
 #endif
 #ifdef DTS_EAGLE
-    fade_in_data = NULL;
-    fade_out_data = NULL;
     AudioUtil::create_device_state_notifier_node();
 #endif
 }
@@ -482,8 +480,6 @@ AudioHardwareALSA::~AudioHardwareALSA()
     }
 #endif
 #ifdef DTS_EAGLE
-    free(fade_in_data);
-    free(fade_out_data);
     AudioUtil::remove_device_state_notifier_node();
 #endif
 }
@@ -760,11 +756,8 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     char prop[PROPERTY_VALUE_MAX];
     property_get("use.dts_eagle", prop, "0");
     if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-        int *data = NULL, id, size, offset, count, dev, dts_found = 0, fade_in = 0;
-        dts_eagle_param_desc *t2 = NULL, **t = &t2;
+        int *data = NULL, id, size, offset, count, dev, dts_found = 0;
         if(!strncmp(DTS_EAGLE_STR, keyValuePairs.string(), strlen(DTS_EAGLE_STR))) {
-            if ((param.getInt(String8("fade"), fade_in) == NO_ERROR) && fade_in > 0)
-                t = (fade_in == 1) ? (dts_eagle_param_desc**)&fade_in_data : (dts_eagle_param_desc**)&fade_out_data;
             if ((param.getInt(String8("count"), count) == NO_ERROR) && count > 1) {
                 String8 tmp;
                 ALOGI("DTS_EAGLE multi count param detected, count: %d", count);
@@ -781,7 +774,6 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
                                 } else {
                                     ALOGE("DTS_EAGLE malformed multi value string.");
                                     dts_found = 0;
-                                    status = BAD_VALUE;
                                     break;
                                 }
                             } else {
@@ -794,21 +786,12 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
                     }
                 } else {
                     ALOGE("DTS_EAGLE mem alloc for multi count param parse failed.");
-                    status = NO_MEMORY;
                 }
             } else {
                 data = new int[1];
-                if (data) {
-                    if (param.getInt(String8(DTS_EAGLE_STR), *data) == NO_ERROR) {
-                        dts_found = 1;
-                        count = 1;
-                    } else {
-                        ALOGE("DTS_EAGLE malformed value string.");
-                        status = BAD_VALUE;
-                    }
-                } else {
-                    ALOGE("DTS_EAGLE mem alloc for param parse failed.");
-                    status = NO_MEMORY;
+                if (param.getInt(String8(DTS_EAGLE_STR), *data) == NO_ERROR) {
+                    dts_found = 1;
+                    count = 1;
                 }
             }
 
@@ -818,26 +801,23 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
                 (param.getInt(String8("offset"), offset) == NO_ERROR) &&
                 (param.getInt(String8("device"), dev) == NO_ERROR)) {
                 ALOGI("DTS_EAGLE param detected: %s", keyValuePairs.string());
-                if (!(*t))
-                    *t = (dts_eagle_param_desc*)malloc(sizeof(dts_eagle_param_desc) + size);
-                if(*t) {
-                    (*t)->id = id;
-                    (*t)->size = size;
-                    (*t)->offset = offset;
-                    (*t)->device = dev;
-                    memcpy((void*)((char*)*t + sizeof(dts_eagle_param_desc)), data, size);
+                dts_eagle_param_desc *t = (dts_eagle_param_desc*)malloc(sizeof(dts_eagle_param_desc) + size);
+                if(t) {
+                    t->id = id;
+                    t->size = size;
+                    t->offset = offset;
+                    t->device = dev;
+                    memcpy((void*)((char*)t + sizeof(dts_eagle_param_desc)), data, size);
                     ALOGD("DTS_EAGLE id: 0x%X, size: %d, offset: %d, device: %d",
-                           (*t)->id, (*t)->size, (*t)->offset, (*t)->device);
-                    if (!fade_in)
-                        status = setDTSEagleParams(*t);
-                    free(t2);
+                           t->id, t->size, t->offset, t->device);
+                    if (setDTSEagleParams(t) < 0)
+                        status = BAD_VALUE;
+                    free(t);
                 } else {
                     ALOGE("DTS_EAGLE mem alloc for dsp structure failed.");
-                    status = NO_MEMORY;
                 }
             } else {
                 ALOGE("DTS_EAGLE param detected but failed parse: %s", keyValuePairs.string());
-                status = BAD_VALUE;
             }
             if (data)
                 delete(data);
