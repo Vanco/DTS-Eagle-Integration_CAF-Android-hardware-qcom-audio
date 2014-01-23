@@ -13,7 +13,25 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+ *
+ ** This file was modified by DTS, Inc. The portions of the
+ ** code that are surrounded by "DTS..." are copyrighted and
+ ** licensed separately, as follows:
+ **
+ **  (C) 2014 DTS, Inc.
+ **
+ ** Licensed under the Apache License, Version 2.0 (the "License");
+ ** you may not use this file except in compliance with the License.
+ ** You may obtain a copy of the License at
+ **
+ **    http://www.apache.org/licenses/LICENSE-2.0
+ **
+ ** Unless required by applicable law or agreed to in writing, software
+ ** distributed under the License is distributed on an "AS IS" BASIS,
+ ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ ** See the License for the specific language governing permissions and
+ ** limitations under the License
+*/
 
 #ifndef ALSA_SOUND_AUDIO_UTIL_H
 #define ALSA_SOUND_AUDIO_UTIL_H
@@ -61,6 +79,17 @@
 /* Rear right of center. */
 #define PCM_CHANNEL_RRC  16
 
+#ifdef DTS_EAGLE
+extern "C" {
+    #include <sys/ioctl.h>
+    #include <sound/asound.h>
+}
+#include <cutils/properties.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#define DEVICE_NODE "/dev/snd/hwC0D3"
+#endif
+
 typedef enum EDID_AUDIO_FORMAT_ID {
     LPCM = 1,
     AC3,
@@ -100,6 +129,11 @@ public:
     static bool getHDMIAudioSinkCaps(EDID_AUDIO_INFO*);
     static bool getHDMIAudioSinkCaps(EDID_AUDIO_INFO*, char *hdmiEDIDData);
     static bool isDeviceDisconnectedReceivedHDMICoreDriver();
+#ifdef DTS_EAGLE
+    static void create_device_state_notifier_node();
+    static void notify_devices(int active_device, int devices);
+    static void remove_device_state_notifier_node();
+#endif
 
 private:
     static int printFormatFromEDID(unsigned char format);
@@ -112,6 +146,12 @@ private:
     static void updateChannelAllocation(EDID_AUDIO_INFO* pInfo);
     static void printSpeakerAllocation(EDID_AUDIO_INFO* pInfo);
     static int32_t getHdmiDispDevFbIndex();
+#ifdef DTS_EAGLE
+    static int32_t mDevices;
+    static int32_t mCurrDevice;
+#endif
 };
 
+
+#define ROUTE_PATH "/data/dts/route"
 #endif /* ALSA_SOUND_AUDIO_UTIL_H */
