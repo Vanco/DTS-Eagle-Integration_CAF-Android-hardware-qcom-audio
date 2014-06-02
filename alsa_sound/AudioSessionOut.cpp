@@ -17,25 +17,7 @@
  ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
- **
- ** This file was modified by DTS, Inc. The portions of the
- ** code that are surrounded by "DTS..." are copyrighted and
- ** licensed separately, as follows:
- **
- **  (C) 2014 DTS, Inc.
- **
- ** Licensed under the Apache License, Version 2.0 (the "License");
- ** you may not use this file except in compliance with the License.
- ** You may obtain a copy of the License at
- **
- **    http://www.apache.org/licenses/LICENSE-2.0
- **
- ** Unless required by applicable law or agreed to in writing, software
- ** distributed under the License is distributed on an "AS IS" BASIS,
- ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- ** See the License for the specific language governing permissions and
- ** limitations under the License
-*/
+ */
 
 #include <errno.h>
 #include <stdarg.h>
@@ -337,16 +319,6 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
     }
     bufferAlloc(mAlsaHandle);
     mBufferSize = mAlsaHandle->periodSize;
-#ifdef DTS_EAGLE
-    char prop[PROPERTY_VALUE_MAX];
-    property_get("use.dts_eagle", prop, "0");
-    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-        if (mTunnelMode && (mParent->fade_in_data!=NULL)) {
-            ALOGD("DTS_EAGLE: send fade in data");
-            mParent->mALSADevice->setDTSEagleParams(mAlsaHandle, mParent->fade_in_data);
-        }
-    }
-#endif
     return NO_ERROR;
 }
 
@@ -636,16 +608,6 @@ status_t AudioSessionOutALSA::start()
 
     if (mPaused) {
         ALOGD("AudioSessionOutALSA ::start mPaused true");
-#ifdef DTS_EAGLE
-           char prop[PROPERTY_VALUE_MAX];
-           property_get("use.dts_eagle", prop, "0");
-           if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-               if (mTunnelMode && (mParent->fade_in_data!=NULL)) {
-                   ALOGD("DTS_EAGLE: send fade in data");
-                   mParent->mALSADevice->setDTSEagleParams(mAlsaHandle, mParent->fade_in_data);
-               }
-           }
-#endif
         status_t err = NO_ERROR;
         if (mSeeking) {
             ALOGV("AudioSessionOutALSA ::start before drain");
@@ -695,16 +657,6 @@ status_t AudioSessionOutALSA::pause()
 status_t AudioSessionOutALSA::pause_l()
 {
     if (!mPaused) {
-#ifdef DTS_EAGLE
-           char prop[PROPERTY_VALUE_MAX];
-           property_get("use.dts_eagle", prop, "0");
-           if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-               if (mTunnelMode && (mParent->fade_out_data!=NULL)) {
-                   ALOGD("DTS_EAGLE: send fade out data");
-                   mParent->mALSADevice->setDTSEagleParams(mAlsaHandle, mParent->fade_out_data);
-               }
-           }
-#endif
         if (ioctl(mAlsaHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1) < 0) {
             ALOGE("PAUSE failed on use case %s", mAlsaHandle->useCase);
             return UNKNOWN_ERROR;
