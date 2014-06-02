@@ -239,6 +239,9 @@ int enable_audio_route(struct audio_device *adev,
     platform_add_backend_name(mixer_path, snd_device);
     ALOGV("%s: apply mixer path: %s", __func__, mixer_path);
     audio_route_apply_path(adev->audio_route, mixer_path);
+
+	ALOGE("DIDDLY route = %i", adev->out_device);
+
     if (update_mixer)
         audio_route_update_mixer(adev->audio_route);
 
