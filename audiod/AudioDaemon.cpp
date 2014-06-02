@@ -73,6 +73,7 @@ namespace android {
         }
 
         sndcardFdPair.clear();
+        memset(buffer, 0x0, sizeof(buffer));
         while ((fgets(buffer, sizeof(buffer), fp) != NULL)) {
             if (line % 2)
                 continue;
@@ -94,7 +95,7 @@ namespace android {
             line++;
         }
 
-        ALOGD("%d sound cards detected", sndcardFdPair.size());
+        ALOGV("%s: %d sound cards detected", __func__, sndcardFdPair.size());
         fclose(fp);
 
         return sndcardFdPair.size() > 0 ? true : false;
@@ -111,13 +112,11 @@ namespace android {
     status_t AudioDaemon::readyToRun() {
 
         ALOGV("readyToRun: open snd card state node files");
-
-        if (!getStateFDs(mSndCardFd)) {
-            ALOGE("File open failed");
-            return NO_INIT;
-        }
         return NO_ERROR;
     }
+
+#define MAX_SLEEP_RETRY 100
+#define AUDIO_INIT_SLEEP_WAIT 100 /* 100 ms */
 
     bool AudioDaemon::threadLoop()
     {
@@ -127,12 +126,22 @@ namespace android {
         snd_card_status cur_state = snd_card_offline;
         struct pollfd *pfd = NULL;
         char rd_buf[9];
+        unsigned int sleepRetry = 0;
+        bool audioInitDone = false;
 
         ALOGV("Start threadLoop()");
-        if (mSndCardFd.empty() && !getStateFDs(mSndCardFd)) {
-            ALOGE("No sound card detected");
-            return false;
+        while (audioInitDone == false && sleepRetry < MAX_SLEEP_RETRY) {
+            if (mSndCardFd.empty() && !getStateFDs(mSndCardFd)) {
+                ALOGE("Sleeping for 100 ms");
+                usleep(AUDIO_INIT_SLEEP_WAIT*1000);
+                sleepRetry++;
+            } else {
+                audioInitDone = true;
+            }
         }
+
+        if (audioInitDone == false)
+            ALOGE("Sound Card is empty!!!");
 
         pfd = new pollfd[mSndCardFd.size()];
         bzero(pfd, sizeof(*pfd) * mSndCardFd.size());
@@ -141,38 +150,67 @@ namespace android {
             pfd[i].events = POLLPRI;
         }
 
+       ALOGD("read for sound card state change before while");
+       for (i = 0; i < mSndCardFd.size(); i++) {
+           if (!read(pfd[i].fd, (void *)rd_buf, 8)) {
+               ALOGE("Error receiving sound card state event (%s)", strerror(errno));
+               ret = false;
+           } else {
+               rd_buf[8] = '\0';
+               ALOGD("sound card state file content: %s before while",rd_buf);
+               lseek(pfd[i].fd, 0, SEEK_SET);
+
+               if (strstr(rd_buf, "OFFLINE")) {
+                   ALOGE("put cur_state to offline");
+                   cur_state = snd_card_offline;
+               } else if (strstr(rd_buf, "ONLINE")){
+                   ALOGE("put cur_state to online");
+                   cur_state = snd_card_online;
+               } else {
+                   ALOGE("ERROR rd_buf %s", rd_buf);
+               }
+
+               ALOGD("cur_state=%d, bootup_complete=%d", cur_state, cur_state );
+               if (cur_state == snd_card_online && !bootup_complete) {
+                   bootup_complete = 1;
+                   ALOGE("sound card up is deteced before while");
+                   ALOGE("bootup_complete set to 1");
+               }
+           }
+       }
+
         while (1) {
-           ALOGD("poll() for adsp state change ");
+           ALOGD("poll() for sound card state change ");
            if (poll(pfd, mSndCardFd.size(), -1) < 0) {
               ALOGE("poll() failed (%s)", strerror(errno));
               ret = false;
               break;
            }
 
-           ALOGD("out of poll() for adsp state change ");
+           ALOGD("out of poll() for sound card state change, SNDCARD size=%d", mSndCardFd.size());
            for (i = 0; i < mSndCardFd.size(); i++) {
                if (pfd[i].revents & POLLPRI) {
                    if (!read(pfd[i].fd, (void *)rd_buf, 8)) {
-                       ALOGE("Error receiving adsp_state event (%s)", strerror(errno));
+                       ALOGE("Error receiving sound card state event (%s)", strerror(errno));
                        ret = false;
                    } else {
                        rd_buf[8] = '\0';
-                       ALOGV("adsp state file content: %s",rd_buf);
+                       ALOGV("sound card state file content: %s, bootup_complete=%d",rd_buf, bootup_complete);
                        lseek(pfd[i].fd, 0, SEEK_SET);
 
-                       if (!strncmp(rd_buf, "OFFLINE", strlen("OFFLINE"))) {
+                       if (strstr(rd_buf, "OFFLINE")) {
                            cur_state = snd_card_offline;
-                       } else if (!strncmp(rd_buf, "ONLINE", strlen("ONLINE"))) {
+                       } else if (strstr(rd_buf, "ONLINE")){
                            cur_state = snd_card_online;
                        }
 
                        if (bootup_complete) {
+                           ALOGV("bootup_complete, so NofityAudioSystem");
                            notifyAudioSystem(mSndCardFd[i].first, cur_state);
                        }
 
                        if (cur_state == snd_card_online && !bootup_complete) {
                            bootup_complete = 1;
-                           ALOGV("adsp is up, device bootup time");
                        }
                    }
                }
@@ -198,7 +236,7 @@ namespace android {
             str += ",ONLINE";
         else
             str += ",OFFLINE";
-        ALOGV("notifyAudioSystem : %s", str.string());
+        ALOGV("%s: notifyAudioSystem : %s", __func__, str.string());
         AudioSystem::setParameters(0, str);
     }
 }
