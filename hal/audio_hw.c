@@ -1763,6 +1763,12 @@ static int out_pause(struct audio_stream_out* stream)
             status = compress_pause(out->compr);
             out->offload_state = OFFLOAD_STATE_PAUSED;
         }
+#ifdef DTS_EAGLE
+        char prop[PROPERTY_VALUE_MAX];
+        property_get("use.dts_eagle", prop, "0");
+        if (!strncmp("true", prop, sizeof("true")))
+            audio_extn_dts_eagle_fade(adev, false);
+#endif
         pthread_mutex_unlock(&out->lock);
     }
     return status;
@@ -1781,6 +1787,13 @@ static int out_resume(struct audio_stream_out* stream)
             status = compress_resume(out->compr);
             out->offload_state = OFFLOAD_STATE_PLAYING;
         }
+#ifdef DTS_EAGLE
+        char prop[PROPERTY_VALUE_MAX];
+        property_get("use.dts_eagle", prop, "0");
+        if (!strncmp("true", prop, sizeof("true")))
+            audio_extn_dts_eagle_fade(adev, true);
+        }
+#endif
         pthread_mutex_unlock(&out->lock);
     }
     return status;
