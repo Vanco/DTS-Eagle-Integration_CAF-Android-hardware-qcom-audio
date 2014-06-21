@@ -144,6 +144,10 @@ struct stream_out {
     struct compress *compr;
     int standby;
     int pcm_device_id;
+#ifdef DTS_EAGLE
+    int isHpxPreprocessed;
+    int hasVideo;
+#endif
     unsigned int sample_rate;
     audio_channel_mask_t channel_mask;
     audio_format_t format;
