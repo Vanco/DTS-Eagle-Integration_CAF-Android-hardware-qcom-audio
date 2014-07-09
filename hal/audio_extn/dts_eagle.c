@@ -19,6 +19,7 @@
 
 #define LOG_TAG "audio_hw_dts_eagle"
 /*#define LOG_NDEBUG 0*/
+#define LOG_NDDEBUG 0
 
 #include <errno.h>
 #include <math.h>
@@ -35,7 +36,7 @@
 #define DTS_EAGLE_KEY       "DTS_EAGLE"
 static const char* DTS_EAGLE_STR = DTS_EAGLE_KEY;
 
-#ifdef DTS_EAGLE
+#ifdef DTS_EAGLE_ENABLED
 #define AUDIO_PARAMETER_KEY_DTS_EAGLE "DTS_EAGLE"
 
 struct dts_eagle_param_desc_alsa {
@@ -57,12 +58,10 @@ static int do_DTS_Eagle_params_stream(struct stream_out *out, struct dts_eagle_p
     ctl = mixer_get_ctl_by_name(out->dev->mixer, mixer_string);
     if (!ctl) {
         ALOGE("DTS_EAGLE_HAL (%s) Failed to open mixer %s", __func__, mixer_string);
-    } else if (t) {
+    } else {
         int size = t->d.size + sizeof(struct dts_eagle_param_desc_alsa);
         ALOGD("DTS_EAGLE_HAL (%s) Opened mixer %s", __func__, mixer_string);
         return mixer_ctl_set_array(ctl, t, size);
-    } else {
-        ALOGD("DTS_EAGLE_HAL (%s) parameter data NULL", __func__);
     }
     return -EINVAL;
 }
@@ -85,29 +84,11 @@ static int do_DTS_Eagle_params(const struct audio_device *adev, struct dts_eagle
     return ret;
 }
 
-int audio_extn_dts_eagle_fade(const struct audio_device *adev, bool fadeIn) {
-    char prop[PROPERTY_VALUE_MAX];
-
-    ALOGI("%s: enter with fade %s requested", __func__, fadeIn ? "in" : "out");
-
-    property_get("use.dts_eagle", prop, "0");
-    if (strncmp("true", prop, sizeof("true")))
-        return 0;
-
-    if(fadeIn)
-        return do_DTS_Eagle_params(adev, fade_in_data);
-    return do_DTS_Eagle_params(adev, fade_out_data);
-}
-
 void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_parms *parms) {
     int ret, val;
-    char value[32] = { 0 }, prop[PROPERTY_VALUE_MAX];
+    char value[32] = { 0 };
 
     ALOGI("%s: enter", __func__);
-
-    property_get("use.dts_eagle", prop, "0");
-    if (strncmp("true", prop, sizeof("true")))
-        return;
 
     memset(value, 0, sizeof(value));
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_DTS_EAGLE, value, sizeof(value));
@@ -231,13 +212,9 @@ exit:
 int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                   struct str_parms *query, struct str_parms *reply) {
     int ret, val;
-    char value[32] = { 0 }, prop[PROPERTY_VALUE_MAX];
+    char value[32] = { 0 };
 
     ALOGI("%s: enter", __func__);
-
-    property_get("use.dts_eagle", prop, "0");
-    if (strncmp("true", prop, sizeof("true")))
-        return;
 
     memset(value, 0, sizeof(value));
     ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_DTS_EAGLE, value, sizeof(value));
@@ -292,7 +269,7 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                         idx += snprintf(&buf[idx], chars_4_int, "%i,", data[i]);
                     buf[idx > 0 ? idx-1 : 0] = 0;
                     ALOGD("DTS_EAGLE_HAL get result: %s", buf);
-                    str_parms_add_str(reply, AUDIO_PARAMETER_KEY_DTS_EAGLE, buf);
+                    strcpy(reply, buf);
                 } else {
                     ALOGE("DTS_EAGLE_HAL failed getting params from kernel with error %i", ret);
                 }
@@ -308,4 +285,4 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
     ALOGV("%s: exit", __func__);
     return 0;
 }
-#endif /* DTS_EAGLE end */
+#endif /* DTS_EAGLE_ENABLED end */
