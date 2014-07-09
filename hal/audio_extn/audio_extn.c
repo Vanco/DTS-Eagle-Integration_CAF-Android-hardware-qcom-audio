@@ -433,7 +433,6 @@ void audio_extn_set_parameters(struct audio_device *adev,
    audio_extn_fm_set_parameters(adev, parms);
    audio_extn_listen_set_parameters(adev, parms);
    audio_extn_hfp_set_parameters(adev, parms);
-   audio_extn_dts_eagle_set_parameters(adev, parms);
    audio_extn_ddp_set_parameters(adev, parms);
    audio_extn_customstereo_set_parameters(adev, parms);
 }
@@ -445,7 +444,6 @@ void audio_extn_get_parameters(const struct audio_device *adev,
     char *kv_pairs = NULL;
     audio_extn_get_afe_proxy_parameters(query, reply);
     audio_extn_get_fluence_parameters(adev, query, reply);
-    audio_extn_dts_eagle_get_parameters(adev, query, reply);
 
     kv_pairs = str_parms_to_str(reply);
     ALOGD_IF(kv_pairs != NULL, "%s: returns %s", __func__, kv_pairs);

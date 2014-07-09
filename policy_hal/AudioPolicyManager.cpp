@@ -39,15 +39,6 @@
 #include <hardware_legacy/audio_policy_conf.h>
 #include <cutils/properties.h>
 
-#ifdef DTS_EAGLE
-extern "C" {
-    #include <sys/ioctl.h>
-    #include <sound/asound.h>
-}
-#include <fcntl.h>
-#define DEVICE_NODE "/dev/snd/hwC0D3"
-#endif
-
 namespace android_audio_legacy {
 
 // ----------------------------------------------------------------------------
@@ -222,28 +213,6 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
         }
 
         updateDevicesAndOutputs();
-
-#ifdef DTS_EAGLE
-        int ndev = getDeviceForStrategy(STRATEGY_MEDIA, true);
-        ALOGV("setDeviceConnectionState() device: %x", ndev);
-        //AudioUtil::notify_devices(ndev, mAvailableOutputDevices);
-        char prop[PROPERTY_VALUE_MAX];
-        property_get("use.dts_eagle", prop, "0");
-        if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-            int fd = open(DEVICE_NODE, O_RDWR);
-            int32_t params[2] = { ndev, 1 /*is primary device*/};
-            if(fd > 0) {
-                if(ioctl(fd, DTS_EAGLE_IOCTL_SET_ACTIVE_DEVICE, &params) < 0) {
-                    ALOGE("DTS_EAGLE: error sending primary device\n");
-                }
-                ALOGD("DTS_EAGLE: sent primary device\n");
-                close(fd);
-            } else {
-                ALOGE("DTS_EAGLE: error opening eagle\n");
-            }
-        }
-#endif
-
         audio_devices_t newDevice = getNewDevice(mPrimaryOutput, false /*fromCache*/);
 #ifdef AUDIO_EXTN_FM_ENABLED
         if(device == AUDIO_DEVICE_OUT_FM) {
@@ -497,26 +466,6 @@ status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
         DolbySystemProperty::set(audioOutputDevice);
     }
 #endif // DOLBY_END
-#ifdef DTS_EAGLE
-    int ndev = getDeviceForStrategy(STRATEGY_MEDIA, true);
-    //AudioUtil::notify_devices(ndev, mAvailableOutputDevices);
-    char prop[PROPERTY_VALUE_MAX];
-    property_get("use.dts_eagle", prop, "0");
-    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
-        int fd = open(DEVICE_NODE, O_RDWR);
-        int32_t params[2] = { ndev, 1 /*is primary device*/};
-        if (fd > 0) {
-            if(ioctl(fd, DTS_EAGLE_IOCTL_SET_ACTIVE_DEVICE, &params) < 0) {
-                ALOGE("DTS_EAGLE: error sending primary device\n");
-            }
-            ALOGD("DTS_EAGLE: sent primary device\n");
-            close(fd);
-        } else {
-            ALOGE("DTS_EAGLE: error opening eagle\n");
-        }
-    }
-#endif
-
     return NO_ERROR;
 }
 
