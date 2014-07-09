@@ -244,6 +244,8 @@ int enable_audio_route(struct audio_device *adev,
     ALOGV("%s: apply mixer path: %s", __func__, mixer_path);
     audio_route_apply_path(adev->audio_route, mixer_path);
 
+	ALOGE("DIDDLY route = %i", adev->out_device);
+
     if (update_mixer)
         audio_route_update_mixer(adev->audio_route);
 
@@ -1522,7 +1524,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         parse_compress_metadata(out, parms);
 #ifdef DTS_EAGLE
         if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) {
-            audio_extn_dts_create_state_notifier_node(out->usecase);
+	    audio_extn_dts_create_state_notifier_node(out->usecase);
             audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),out->playback_started,out->isHpxPreprocessed);
         }
 #endif
@@ -1665,7 +1667,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
             out->playback_started = 1;
             out->offload_state = OFFLOAD_STATE_PLAYING;
 #ifdef DTS_EAGLE
-            if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+	    if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
                 audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),out->playback_started,out->isHpxPreprocessed);
 #endif
         }
@@ -1804,7 +1806,7 @@ static int out_pause(struct audio_stream_out* stream)
             property_get("use.dts_eagle", prop, "0");
             if (!strncmp("true", prop, sizeof("true")))
                 audio_extn_dts_eagle_fade(adev, false);
-            if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+	    if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
                 audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),0,out->isHpxPreprocessed);
 #endif
         }
@@ -1830,7 +1832,7 @@ static int out_resume(struct audio_stream_out* stream)
             property_get("use.dts_eagle", prop, "0");
             if (!strncmp("true", prop, sizeof("true")))
                 audio_extn_dts_eagle_fade(adev, true);
-            if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+	    if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
                 audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),1,out->isHpxPreprocessed);
 #endif
         }
@@ -2279,7 +2281,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->playback_started = 0;
 
 #ifdef DTS_EAGLE
-        audio_extn_dts_create_state_notifier_node(out->usecase);
+	audio_extn_dts_create_state_notifier_node(out->usecase);
 #endif
 
         create_offload_callback_thread(out);
