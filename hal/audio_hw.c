@@ -63,6 +63,10 @@
 
 #define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_DEEP_BUFFER
 
+#ifdef DTS_EAGLE
+#define AUDIO_PARAMETER_KEY_HPX       "hpx_processed"
+#endif
+
 struct pcm_config pcm_config_deep_buffer = {
     .channels = 2,
     .rate = DEFAULT_OUTPUT_SAMPLING_RATE,
@@ -239,10 +243,16 @@ int enable_audio_route(struct audio_device *adev,
     platform_add_backend_name(mixer_path, snd_device);
     ALOGV("%s: apply mixer path: %s", __func__, mixer_path);
     audio_route_apply_path(adev->audio_route, mixer_path);
+
     if (update_mixer)
         audio_route_update_mixer(adev->audio_route);
 
+#ifdef DTS_EAGLE
+    audio_extn_dts_notify_route_node(adev->out_device, adev->out_device);
+#endif
+
     ALOGV("%s: exit", __func__);
+
     return 0;
 }
 
@@ -1097,6 +1107,11 @@ static int stop_output_stream(struct stream_out *out)
     if (out->usecase == USECASE_AUDIO_PLAYBACK_OFFLOAD) {
         if (adev->visualizer_stop_output != NULL)
             adev->visualizer_stop_output(out->handle, out->pcm_device_id);
+
+#ifdef DTS_EAGLE
+        audio_extn_dts_remove_state_notifier_node(out->usecase);
+#endif
+
         if (adev->offload_effects_stop_output != NULL)
             adev->offload_effects_stop_output(out->handle, out->pcm_device_id);
     }
@@ -1181,6 +1196,12 @@ int start_output_stream(struct stream_out *out)
         }
         if (out->offload_callback)
             compress_nonblock(out->compr, out->non_blocking);
+
+#ifdef DTS_EAGLE
+        audio_extn_dts_create_state_notifier_node(out->usecase);
+        audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),out->playback_started,out->isHpxPreprocessed);
+        audio_extn_dts_notify_route_node(out->devices, out->devices);
+#endif
 
 #ifdef DS1_DOLBY_DDP_ENABLED
         if (audio_extn_is_dolby_format(out->format))
@@ -1391,6 +1412,15 @@ static int parse_compress_metadata(struct stream_out *out, struct str_parms *par
         tmp_mdata.encoder_padding = atoi(value);
     }
 
+#ifdef DTS_EAGLE
+    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_HPX, value, sizeof(value));
+    if (ret >= 0) {
+        if (ret = ((!strncmp("true", value, sizeof("true")) || atoi(value)) ? -1 : (!strncmp("false", value, sizeof("false")) || !atoi(value)) ? -2 : ret) < 0)
+            audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo, out->sample_rate, popcount(out->channel_mask), out->playback_started, (out->isHpxPreprocessed = (2 + ret)));
+        ALOGD("%s: hpx preprocessed set to: %d", __func__, out->isHpxPreprocessed);
+    }
+#endif
+
     if(!is_meta_data_params) {
         ALOGV("%s: Not gapless meta data params", __func__);
         return 0;
@@ -1490,6 +1520,12 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
     if (out->usecase == USECASE_AUDIO_PLAYBACK_OFFLOAD) {
         pthread_mutex_lock(&out->lock);
         parse_compress_metadata(out, parms);
+#ifdef DTS_EAGLE
+        if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) {
+            audio_extn_dts_create_state_notifier_node(out->usecase);
+            audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),out->playback_started,out->isHpxPreprocessed);
+        }
+#endif
         pthread_mutex_unlock(&out->lock);
     }
 
@@ -1628,6 +1664,10 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
             compress_start(out->compr);
             out->playback_started = 1;
             out->offload_state = OFFLOAD_STATE_PLAYING;
+#ifdef DTS_EAGLE
+            if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+                audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),out->playback_started,out->isHpxPreprocessed);
+#endif
         }
         pthread_mutex_unlock(&out->lock);
         return ret;
@@ -1759,6 +1799,14 @@ static int out_pause(struct audio_stream_out* stream)
         if (out->compr != NULL && out->offload_state == OFFLOAD_STATE_PLAYING) {
             status = compress_pause(out->compr);
             out->offload_state = OFFLOAD_STATE_PAUSED;
+#ifdef DTS_EAGLE
+            char prop[PROPERTY_VALUE_MAX];
+            property_get("use.dts_eagle", prop, "0");
+            if (!strncmp("true", prop, sizeof("true")))
+                audio_extn_dts_eagle_fade(adev, false);
+            if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+                audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),0,out->isHpxPreprocessed);
+#endif
         }
         pthread_mutex_unlock(&out->lock);
     }
@@ -1777,6 +1825,14 @@ static int out_resume(struct audio_stream_out* stream)
         if (out->compr != NULL && out->offload_state == OFFLOAD_STATE_PAUSED) {
             status = compress_resume(out->compr);
             out->offload_state = OFFLOAD_STATE_PLAYING;
+#ifdef DTS_EAGLE
+            char prop[PROPERTY_VALUE_MAX];
+            property_get("use.dts_eagle", prop, "0");
+            if (!strncmp("true", prop, sizeof("true")))
+                audio_extn_dts_eagle_fade(adev, true);
+            if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+                audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),1,out->isHpxPreprocessed);
+#endif
         }
         pthread_mutex_unlock(&out->lock);
     }
@@ -2109,6 +2165,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->channel_mask = AUDIO_CHANNEL_OUT_STEREO;
     out->supported_channel_masks[0] = AUDIO_CHANNEL_OUT_STEREO;
     out->handle = handle;
+#ifdef DTS_EAGLE
+    out->hasVideo = 0;//config->offload_info.has_video;
+    out->isHpxPreprocessed = 0;//config->offload_info.hpx_processed;
+#endif
 
     /* Init use case and pcm_config */
     if ((out->flags == AUDIO_OUTPUT_FLAG_DIRECT) &&
@@ -2218,6 +2278,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->offload_state = OFFLOAD_STATE_IDLE;
         out->playback_started = 0;
 
+#ifdef DTS_EAGLE
+        audio_extn_dts_create_state_notifier_node(out->usecase);
+#endif
+
         create_offload_callback_thread(out);
         ALOGV("%s: offloaded output offload_info version %04x bit rate %d",
                 __func__, config->offload_info.version,
@@ -2294,6 +2358,12 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     config->sample_rate = out->stream.common.get_sample_rate(&out->stream.common);
 
     *stream_out = &out->stream;
+
+#ifdef DTS_EAGLE
+    if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+        audio_extn_dts_notify_playback_state(out->usecase, out->hasVideo,out->sample_rate,popcount(out->channel_mask),out->playback_started,out->isHpxPreprocessed);
+#endif
+
     ALOGV("%s: exit", __func__);
     return 0;
 
@@ -2329,6 +2399,12 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     }
     pthread_cond_destroy(&out->cond);
     pthread_mutex_destroy(&out->lock);
+
+#ifdef DTS_EAGLE
+    if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+        audio_extn_dts_remove_state_notifier_node(out->usecase);
+#endif
+
     free(stream);
     ALOGV("%s: exit", __func__);
 }
