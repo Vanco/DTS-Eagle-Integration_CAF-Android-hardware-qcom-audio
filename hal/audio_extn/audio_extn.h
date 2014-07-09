@@ -218,13 +218,6 @@ void audio_extn_dts_eagle_set_parameters(struct audio_device *adev,
 int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                   struct str_parms *query, struct str_parms *reply);
 int audio_extn_dts_eagle_fade(const struct audio_device *adev, bool fadeIn);
-void audio_extn_dts_create_route_node();
-void audio_extn_dts_notify_route_node(int active_device, int devices );
-void audio_extn_dts_remove_route_node();
-void audio_extn_dts_create_state_notifier_node(int streamOut);
-void audio_extn_dts_notify_playback_state(int streamOut, int hasVideo, int sampleRate,
-                                          int channels, int isPlaying, int isHpxPreprocessed);
-void audio_extn_dts_remove_state_notifier_node(int streamOut);
 #endif
 
 #if defined(DS1_DOLBY_DDP_ENABLED) || defined(DS1_DOLBY_DAP_ENABLED)
