@@ -112,8 +112,9 @@ ifneq ($(strip $(AUDIO_FEATURE_DISABLED_COMPRESS_CAPTURE)),true)
     LOCAL_SRC_FILES += audio_extn/compress_capture.c
 endif
 
-ifeq ($(strip $(AUDIO_FEATURE_ENABLED_DTS_EAGLE)),true)
+ifneq ($(strip $(AUDIO_FEATURE_DISABLED_DTS_EAGLE)),true)
     LOCAL_CFLAGS += -DDTS_EAGLE
+    LOCAL_C_INCLUDES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
     LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
     LOCAL_SRC_FILES += audio_extn/dts_eagle.c
 endif

@@ -52,8 +52,6 @@
 #define MAX_SUPPORTED_CHANNEL_MASKS 2
 #define DEFAULT_HDMI_OUT_CHANNELS   2
 
-#define AUDIO_PARAMETER_KEY_HPX       "hpx_processed"
-
 typedef int snd_device_t;
 
 /* These are the supported use cases by the hardware.
@@ -146,8 +144,10 @@ struct stream_out {
     struct compress *compr;
     int standby;
     int pcm_device_id;
+#ifdef DTS_EAGLE
     int isHpxPreprocessed;
     int hasVideo;
+#endif
     unsigned int sample_rate;
     audio_channel_mask_t channel_mask;
     audio_format_t format;
@@ -245,8 +245,6 @@ struct audio_device {
     void *offload_effects_lib;
     int (*offload_effects_start_output)(audio_io_handle_t, int);
     int (*offload_effects_stop_output)(audio_io_handle_t, int);
-
-    int (*offload_effects_set_hpx_state)(bool);
 };
 
 int select_devices(struct audio_device *adev,

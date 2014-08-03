@@ -39,10 +39,6 @@
 #include <hardware_legacy/audio_policy_conf.h>
 #include <cutils/properties.h>
 
-extern "C" {
-#include "AudioUtil.h"
-}
-
 namespace android_audio_legacy {
 
 // ----------------------------------------------------------------------------
@@ -217,10 +213,6 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
         }
 
         updateDevicesAndOutputs();
-
-	int ndev = getDeviceForStrategy(STRATEGY_MEDIA, true);
-        notify_route_node(ndev, mAvailableOutputDevices);
-
         audio_devices_t newDevice = getNewDevice(mPrimaryOutput, false /*fromCache*/);
 #ifdef AUDIO_EXTN_FM_ENABLED
         if(device == AUDIO_DEVICE_OUT_FM) {
@@ -1775,13 +1767,11 @@ void AudioPolicyManager::setPhoneState(int state)
 
 extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface)
 {
-    create_route_node();
     return new AudioPolicyManager(clientInterface);
 }
 
 extern "C" void destroyAudioPolicyManager(AudioPolicyInterface *interface)
 {
-    remove_route_node();
     delete interface;
 }
 

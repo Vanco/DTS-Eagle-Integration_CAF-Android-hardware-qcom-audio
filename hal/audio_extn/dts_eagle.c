@@ -41,6 +41,7 @@
 #define AUDIO_PARAMETER_KEY_DTS_EAGLE   "DTS_EAGLE"
 #define ROUTE_FILE                      "data/data/dts/route"
 #define STATE_NOTIFY_FILE               "/data/data/dts/stream"
+#define DEVICE_NODE                     "/dev/snd/hwC0D3"
 #define DTS_EAGLE_KEY                   "DTS_EAGLE"
 #define MAX_LENGTH_OF_INTEGER_IN_STRING 13
 
@@ -55,7 +56,7 @@ static int32_t mDevices = 0;
 static int32_t mCurrDevice = 0;
 static const char* DTS_EAGLE_STR = DTS_EAGLE_KEY;
 
-static int do_DTS_Eagle_params_stream(struct stream_out *out, struct dts_eagle_param_desc_alsa *t, bool get) {
+static int do_DTS_Eagle_params_stream(struct stream_out *out, struct dts_eagle_param_desc_alsa *t) {
     char mixer_string[128];
     struct mixer_ctl *ctl;
     int pcm_device_id = platform_get_pcm_device_id(out->usecase, PCM_PLAYBACK);
@@ -69,12 +70,6 @@ static int do_DTS_Eagle_params_stream(struct stream_out *out, struct dts_eagle_p
     } else if (t) {
         int size = t->d.size + sizeof(struct dts_eagle_param_desc_alsa);
         ALOGD("DTS_EAGLE_HAL (%s): opened mixer %s", __func__, mixer_string);
-        if (get) {
-            ALOGD("DTS_EAGLE_HAL (%s): get request", __func__);
-            mixer_ctl_set_array(ctl, t, size);
-            return mixer_ctl_get_array(ctl, t, size);
-	}
-	ALOGD("DTS_EAGLE_HAL (%s): set request", __func__);
         return mixer_ctl_set_array(ctl, t, size);
     } else {
         ALOGD("DTS_EAGLE_HAL (%s): parameter data NULL", __func__);
@@ -82,7 +77,7 @@ static int do_DTS_Eagle_params_stream(struct stream_out *out, struct dts_eagle_p
     return -EINVAL;
 }
 
-static int do_DTS_Eagle_params(const struct audio_device *adev, struct dts_eagle_param_desc_alsa *t, bool get) {
+static int do_DTS_Eagle_params(const struct audio_device *adev, struct dts_eagle_param_desc_alsa *t) {
     struct listnode *node;
     struct audio_usecase *usecase;
     int ret = 0;
@@ -92,7 +87,7 @@ static int do_DTS_Eagle_params(const struct audio_device *adev, struct dts_eagle
     list_for_each(node, &adev->usecase_list) {
         usecase = node_to_item(node, struct audio_usecase, list);
         if (usecase->type == PCM_PLAYBACK) {
-            int tret = do_DTS_Eagle_params_stream(usecase->stream.out, t, get);
+            int tret = do_DTS_Eagle_params_stream(usecase->stream.out, t);
                 if (tret < 0)
                     ret = tret;
         }
@@ -110,8 +105,8 @@ int audio_extn_dts_eagle_fade(const struct audio_device *adev, bool fadeIn) {
         return 0;
 
     if(fadeIn)
-        return do_DTS_Eagle_params(adev, fade_in_data, false);
-    return do_DTS_Eagle_params(adev, fade_out_data, false);
+        return do_DTS_Eagle_params(adev, fade_in_data);
+    return do_DTS_Eagle_params(adev, fade_out_data);
 }
 
 void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_parms *parms) {
@@ -224,7 +219,7 @@ void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_p
                     ALOGD("DTS_EAGLE_HAL (%s): id: 0x%X, size: %d, offset: %d, device: %d", __func__,
                            (*t)->d.id, (*t)->d.size, (*t)->d.offset, (*t)->d.device);
                     if (!fade_in) {
-                        ret = do_DTS_Eagle_params(adev, *t, false);
+                        ret = do_DTS_Eagle_params(adev, *t);
                         if (ret < 0)
                             ALOGE("DTS_EAGLE_HAL (%s): failed setting params in kernel with error %i", __func__, ret);
                     }
@@ -297,10 +292,10 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                 t->d.id = id;
                 t->d.size = size;
                 t->d.offset = offset;
-                t->d.device = dev | DTS_EAGLE_FLAG_ALSA_GET;
+                t->d.device = dev | 0x80000000/*trigger get*/;
                 ALOGD("DTS_EAGLE_HAL (%s): id (get): 0x%X, size: %d, offset: %d, device: %d", __func__,
                        t->d.id, t->d.size, t->d.offset, t->d.device & 0x7FFFFFFF);
-                ret = do_DTS_Eagle_params(adev, t, true);
+                ret = do_DTS_Eagle_params(adev, t);
                 if (ret >= 0) {
                     data = (int*)((char*)t + sizeof(struct dts_eagle_param_desc_alsa));
                     for (i = 0; i < count; i++)
@@ -322,6 +317,88 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
 
     ALOGV("DTS_EAGLE_HAL (%s): exit", __func__);
     return 0;
+}
+
+void audio_extn_dts_create_route_node()
+{
+    char prop[PROPERTY_VALUE_MAX];
+    int fd;
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+        ALOGV("DTS_EAGLE_NODE_ROUTE (%s): create_route_node", __func__);
+
+        if ((fd=open(ROUTE_FILE, O_RDONLY)) < 0) {
+            ALOGV("DTS_EAGLE_NODE_ROUTE (%s): no file exists", __func__);
+        } else {
+            ALOGV("DTS_EAGLE_NODE_ROUTE (%s): a file with the same name exists, removing it before creating it", __func__);
+            close(fd);
+            remove(ROUTE_FILE);
+        }
+
+        if ((fd=creat(ROUTE_FILE, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0) {
+            ALOGE("DTS_EAGLE_NODE_ROUTE (%s): opening route node failed returned", __func__);
+            return;
+        }
+        chmod(ROUTE_FILE, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH);
+        ALOGV("DTS_EAGLE_NODE_ROUTE (%s): opening route  node successful", __func__);
+        close(fd);
+    }
+}
+
+void audio_extn_dts_notify_route_node(int active_device, int devices) {
+    char prop[PROPERTY_VALUE_MAX];
+    char buf[1024];
+    int fd;
+    if ((mCurrDevice == active_device) && (mDevices == devices)) {
+       ALOGV("DTS_EAGLE_NODE_ROUTE (%s): nothing to update to route node", __func__);
+       return;
+    }
+
+    mDevices = devices;
+    mCurrDevice = active_device;
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+        ALOGV("DTS_EAGLE_NODE_ROUTE (%s): notify active device : %d all_devices : %d", __func__, active_device, devices);
+        mDevices = devices;
+        if ((fd=open(ROUTE_FILE, O_TRUNC|O_WRONLY)) < 0) {
+            ALOGV("DTS_EAGLE_NODE_ROUTE (%s): write device to route node failed", __func__);
+        } else {
+            ALOGV("DTS_EAGLE_NODE_ROUTE (%s): write device to route node successful", __func__);
+            snprintf(buf, sizeof(buf), "device=%d;all_devices=%d", active_device, devices);
+            int n = write(fd, buf, strlen(buf));
+            ALOGV("DTS_EAGLE_NODE_ROUTE (%s): number of bytes written: %d", __func__, n);
+            close(fd);
+        }
+
+        int fd = open(DEVICE_NODE, O_RDWR);
+        int32_t params[2] = {active_device, 1 /*is primary device*/};
+        if (fd > 0) {
+            if(ioctl(fd, DTS_EAGLE_IOCTL_SET_ACTIVE_DEVICE, &params) < 0) {
+                ALOGE("DTS_EAGLE (%s): error sending primary device\n", __func__);
+            }
+            ALOGD("DTS_EAGLE (%s): sent primary device\n", __func__);
+            close(fd);
+        } else {
+            ALOGE("DTS_EAGLE (%s): error opening eagle\n", __func__);
+        }
+    }
+}
+
+void audio_extn_dts_remove_route_node()
+{
+    char prop[PROPERTY_VALUE_MAX];
+    int fd;
+    property_get("use.dts_eagle", prop, "0");
+    if (!strncmp("true", prop, sizeof("true")) || atoi(prop)) {
+        ALOGV("DTS_EAGLE_NODE_ROUTE (%s): remove_route_node", __func__);
+        if ((fd=open(ROUTE_FILE, O_RDONLY)) < 0) {
+            ALOGV("DTS_EAGLE_NODE_ROUTE (%s): open route  node failed", __func__);
+        } else {
+            ALOGV("DTS_EAGLE_NODE_ROUTE (%s): open route node successful, removing the file", __func__);
+            close(fd);
+            remove(ROUTE_FILE);
+        }
+    }
 }
 
 void audio_extn_dts_create_state_notifier_node(int streamOut)

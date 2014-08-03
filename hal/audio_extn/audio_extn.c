@@ -39,7 +39,6 @@ struct audio_extn_module {
     bool aanc_enabled;
     bool custom_stereo_enabled;
     uint32_t proxy_channel_num;
-    bool hpx_enabled;
 };
 
 static struct audio_extn_module aextnmod = {
@@ -47,14 +46,12 @@ static struct audio_extn_module aextnmod = {
     .aanc_enabled = 0,
     .custom_stereo_enabled = 0,
     .proxy_channel_num = 2,
-    .hpx_enabled = 0,
 };
 
 #define AUDIO_PARAMETER_KEY_ANC        "anc_enabled"
 #define AUDIO_PARAMETER_KEY_WFD        "wfd_channel_cap"
 #define AUDIO_PARAMETER_CAN_OPEN_PROXY "can_open_proxy"
 #define AUDIO_PARAMETER_CUSTOM_STEREO  "stereo_as_dual_mono"
-#define AUDIO_PARAMETER_HPX            "HPX"
 
 #ifndef FM_ENABLED
 #define audio_extn_fm_set_parameters(adev, parms) (0)
@@ -107,40 +104,6 @@ void audio_extn_customstereo_set_parameters(struct audio_device *adev,
     }
 }
 #endif /* CUSTOM_STEREO_ENABLED */
-
-#ifndef DTS_EAGLE
-#define audio_extn_hpx_set_parameters(adev, parms)         (0)
-#else
-void audio_extn_hpx_set_parameters(struct audio_device *adev,
-                                   struct str_parms *parms)
-{
-    int ret = 0;
-    char value[32]={0};
-    bool hpx_state = false;
-    const char *mixer_ctl_name = "Set HPX OnOff";
-    struct mixer_ctl *ctl = NULL;
-    ALOGV("%s", __func__);
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_HPX, value,
-                            sizeof(value));
-    if (ret >= 0) {
-        if ((!strncmp("true", value, sizeof("true")) || atoi(value)) ||
-            (!strncmp("ON", value, sizeof("ON"))))
-            hpx_state = true;
-
-        if (hpx_state == aextnmod.hpx_enabled)
-            return;
-
-        aextnmod.hpx_enabled = hpx_state;
-
-        ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
-        if (ctl)
-            mixer_ctl_set_value(ctl, 0, aextnmod.hpx_enabled);
-
-        if (adev->offload_effects_set_hpx_state != NULL)
-            adev->offload_effects_set_hpx_state(hpx_state);
-    }
-}
-#endif
 
 #ifndef ANC_HEADSET_ENABLED
 #define audio_extn_set_anc_parameters(adev, parms)       (0)
@@ -473,7 +436,6 @@ void audio_extn_set_parameters(struct audio_device *adev,
    audio_extn_dts_eagle_set_parameters(adev, parms);
    audio_extn_ddp_set_parameters(adev, parms);
    audio_extn_customstereo_set_parameters(adev, parms);
-   audio_extn_hpx_set_parameters(adev, parms);
 }
 
 void audio_extn_get_parameters(const struct audio_device *adev,
