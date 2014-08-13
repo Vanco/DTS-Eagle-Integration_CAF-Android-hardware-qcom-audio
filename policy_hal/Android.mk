@@ -16,11 +16,6 @@ LOCAL_STATIC_LIBRARIES := \
 LOCAL_WHOLE_STATIC_LIBRARIES := \
     libaudiopolicy_legacy
 
-LOCAL_C_INCLUDES += hardware/libhardware_legacy/audio
-ifeq ($(strip $(AUDIO_FEATURE_ENABLED_DTS_EAGLE)),true)
-  LOCAL_CFLAGS += -DDTS_EAGLE
-endif
-
 LOCAL_MODULE := audio_policy.$(TARGET_BOARD_PLATFORM)
 LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_MODULE_TAGS := optional
