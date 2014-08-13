@@ -1207,8 +1207,8 @@ int start_output_stream(struct stream_out *out)
 
         audio_extn_dts_create_state_notifier_node(out->usecase);
         audio_extn_dts_notify_playback_state(out->usecase, out->has_video, out->sample_rate,
-                                             popcount(out->channel_mask),
-                                             out->playback_started, out->is_hpx_preprocessed);
+                                             popcount(out->channel_mask), out->playback_started,
+                                             out->is_hpx_preprocessed);
 
 #ifdef DS1_DOLBY_DDP_ENABLED
         if (audio_extn_is_dolby_format(out->format))
@@ -1428,8 +1428,8 @@ static int parse_compress_metadata(struct stream_out *out, struct str_parms *par
         if (ret < 0) {
             out->is_hpx_preprocessed = (2 + ret);
             audio_extn_dts_notify_playback_state(out->usecase, out->has_video, out->sample_rate,
-                                                 popcount(out->channel_mask),
-                                                 out->playback_started, out->is_hpx_preprocessed);
+                                                 popcount(out->channel_mask), out->playback_started,
+                                                 out->is_hpx_preprocessed);
         }
         ALOGD("%s: hpx preprocessed set to: %d", __func__, out->is_hpx_preprocessed);
     }
@@ -1537,8 +1537,8 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
         if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) {
             audio_extn_dts_create_state_notifier_node(out->usecase);
             audio_extn_dts_notify_playback_state(out->usecase, out->has_video, out->sample_rate,
-                                                 popcount(out->channel_mask),
-                                                 out->playback_started, out->is_hpx_preprocessed);
+                                                 popcount(out->channel_mask), out->playback_started,
+                                                 out->is_hpx_preprocessed);
         }
 
         pthread_mutex_unlock(&out->lock);
@@ -1682,8 +1682,8 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
 
             if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
                 audio_extn_dts_notify_playback_state(out->usecase, out->has_video, out->sample_rate,
-                                                     popcount(out->channel_mask),
-                                                     out->playback_started, out->is_hpx_preprocessed);
+                                                     popcount(out->channel_mask), out->playback_started,
+                                                     out->is_hpx_preprocessed);
 
         }
         pthread_mutex_unlock(&out->lock);
@@ -1822,9 +1822,8 @@ static int out_pause(struct audio_stream_out* stream)
             if (!strncmp("true", prop, sizeof("true")))
                 audio_extn_dts_eagle_fade(adev, false);
             if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
-                audio_extn_dts_notify_playback_state(out->usecase, out->has_video,
-                                                     out->sample_rate, popcount(out->channel_mask),
-                                                     0, out->is_hpx_preprocessed);
+                audio_extn_dts_notify_playback_state(out->usecase, out->has_video, out->sample_rate,
+                                                     popcount(out->channel_mask), 0, out->is_hpx_preprocessed);
         }
         pthread_mutex_unlock(&out->lock);
     }

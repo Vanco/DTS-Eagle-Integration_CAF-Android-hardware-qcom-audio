@@ -114,6 +114,7 @@ endif
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_DTS_EAGLE)),true)
     LOCAL_CFLAGS += -DDTS_EAGLE
+    LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
     LOCAL_SRC_FILES += audio_extn/dts_eagle.c
 endif
 

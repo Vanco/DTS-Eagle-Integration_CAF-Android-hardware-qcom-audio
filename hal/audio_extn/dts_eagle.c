@@ -88,26 +88,25 @@ static int do_DTS_Eagle_params(const struct audio_device *adev, struct dts_eagle
 
     list_for_each(node, &adev->usecase_list) {
         usecase = node_to_item(node, struct audio_usecase, list);
-        /* set/get eagle params for offload usecases only */
-        if ((usecase->type == PCM_PLAYBACK) && is_offload_usecase(usecase->id)) {
+        if (usecase->type == PCM_PLAYBACK) {
             int tret = do_DTS_Eagle_params_stream(usecase->stream.out, t, get);
-            if (tret < 0)
-                ret = tret;
+                if (tret < 0)
+                    ret = tret;
         }
     }
     return ret;
 }
 
-int audio_extn_dts_eagle_fade(const struct audio_device *adev, bool fade_in) {
+int audio_extn_dts_eagle_fade(const struct audio_device *adev, bool fadeIn) {
     char prop[PROPERTY_VALUE_MAX];
 
-    ALOGI("DTS_EAGLE_HAL (%s): enter with fade %s requested", __func__, fade_in ? "in" : "out");
+    ALOGI("DTS_EAGLE_HAL (%s): enter with fade %s requested", __func__, fadeIn ? "in" : "out");
 
     property_get("use.dts_eagle", prop, "0");
     if (strncmp("true", prop, sizeof("true")))
         return 0;
 
-    if(fade_in)
+    if(fadeIn)
         return do_DTS_Eagle_params(adev, fade_in_data, false);
     return do_DTS_Eagle_params(adev, fade_out_data, false);
 }
@@ -245,7 +244,6 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                   struct str_parms *query, struct str_parms *reply) {
     int ret, val;
     char value[32] = { 0 }, prop[PROPERTY_VALUE_MAX];
-    char params[512];
 
     ALOGI("DTS_EAGLE_HAL (%s): enter", __func__);
 
@@ -253,10 +251,10 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
     if (strncmp("true", prop, sizeof("true")))
         return 0;
 
+    memset(value, 0, sizeof(value));
     ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_DTS_EAGLE, value, sizeof(value));
     if (ret >= 0) {
-        int *data = NULL, id = 0, size = 0, offset = 0,
-            count = 1, dev = 0, idx = 0, dts_found = 0, i = 0;
+        int *data = NULL, id, size, offset, count = 1, dev, idx = 0, dts_found = 0, i;
         const size_t chars_4_int = 16;
         ret = str_parms_get_str(query, "count", value, sizeof(value));
         if (ret >= 0) {
@@ -289,7 +287,7 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
 
         if (dts_found) {
             ALOGI("DTS_EAGLE_HAL (%s): param (get) detected: %s", __func__, str_parms_to_str(query));
-            struct dts_eagle_param_desc_alsa *t = (struct dts_eagle_param_desc_alsa *)params;
+            struct dts_eagle_param_desc_alsa *t = (struct dts_eagle_param_desc_alsa*)malloc(sizeof(struct dts_eagle_param_desc_alsa) + size);
             if(t) {
                 char buf[chars_4_int*count];
                 t->alsa_effect_ID = DTS_EAGLE_MODULE;
@@ -297,38 +295,25 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                 t->d.size = size;
                 t->d.offset = offset;
                 t->d.device = dev | DTS_EAGLE_FLAG_ALSA_GET;
-                ALOGV("DTS_EAGLE_HAL (%s): id (get): 0x%X, size: %d, offset: %d, device: %d", __func__,
+                ALOGD("DTS_EAGLE_HAL (%s): id (get): 0x%X, size: %d, offset: %d, device: %d", __func__,
                        t->d.id, t->d.size, t->d.offset, t->d.device & 0x7FFFFFFF);
-                if ((sizeof(struct dts_eagle_param_desc_alsa) + size) > 512) {
-                    ALOGE("%s: requested data too large, just return", __func__);
-                    return -1;
-                }
                 ret = do_DTS_Eagle_params(adev, t, true);
                 if (ret >= 0) {
-                    data = (int*)(params + sizeof(struct dts_eagle_param_desc_alsa));
+                    data = (int*)((char*)t + sizeof(struct dts_eagle_param_desc_alsa));
                     for (i = 0; i < count; i++)
                         idx += snprintf(&buf[idx], chars_4_int, "%i,", data[i]);
                     buf[idx > 0 ? idx-1 : 0] = 0;
                     ALOGD("DTS_EAGLE_HAL (%s): get result: %s", __func__, buf);
-                    str_parms_add_int(reply, "size", size);
                     str_parms_add_str(reply, AUDIO_PARAMETER_KEY_DTS_EAGLE, buf);
-                    str_parms_add_int(reply, "count", count);
-                    snprintf(value, sizeof(value), "0x%x", id);
-                    str_parms_add_str(reply, "id", value);
-                    str_parms_add_int(reply, "device", dev);
-                    str_parms_add_int(reply, "offset", offset);
-                    ALOGV("DTS_EAGLE_HAL (%s): reply: %s", __func__, str_parms_to_str(reply));
                 } else {
                     ALOGE("DTS_EAGLE_HAL (%s): failed getting params from kernel with error %i", __func__, ret);
-                    return -1;
                 }
+                free(t);
             } else {
                 ALOGE("DTS_EAGLE_HAL (%s): mem alloc for (get) dsp structure failed.", __func__);
-                return -1;
             }
         } else {
             ALOGE("DTS_EAGLE_HAL (%s): param (get) detected but failed parse: %s", __func__, str_parms_to_str(query));
-            return -1;
         }
     }
 
@@ -336,7 +321,7 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
     return 0;
 }
 
-void audio_extn_dts_create_state_notifier_node(int stream_out)
+void audio_extn_dts_create_state_notifier_node(int streamOut)
 {
     char prop[PROPERTY_VALUE_MAX];
     char path[PATH_MAX];
@@ -344,9 +329,9 @@ void audio_extn_dts_create_state_notifier_node(int stream_out)
     int fd;
     property_get("use.dts_eagle", prop, "0");
     if ((!strncmp("true", prop, sizeof("true")) || atoi(prop))) {
-        ALOGV("DTS_EAGLE_NODE_STREAM (%s): create_state_notifier_node - stream_out: %d", __func__, stream_out);
+        ALOGV("DTS_EAGLE_NODE_STREAM (%s): create_state_notifier_node - streamOut: %d", __func__, streamOut);
         strlcpy(path, STATE_NOTIFY_FILE, sizeof(path));
-        snprintf(value, sizeof(value), "%d", stream_out);
+        snprintf(value, sizeof(value), "%d", streamOut);
         strlcat(path, value, sizeof(path));
 
         if ((fd=open(path, O_RDONLY)) < 0) {
@@ -366,8 +351,8 @@ void audio_extn_dts_create_state_notifier_node(int stream_out)
     }
 }
 
-void audio_extn_dts_notify_playback_state(int stream_out, int has_video, int sample_rate,
-                           int channels, int is_playing, int is_hpx_preprocessed) {
+void audio_extn_dts_notify_playback_state(int streamOut, int hasVideo, int sampleRate,
+                           int channels, int isPlaying, int isHpxPreprocessed) {
     char prop[PROPERTY_VALUE_MAX];
     char path[PATH_MAX];
     char value[MAX_LENGTH_OF_INTEGER_IN_STRING];
@@ -375,15 +360,15 @@ void audio_extn_dts_notify_playback_state(int stream_out, int has_video, int sam
     int fd;
     property_get("use.dts_eagle", prop, "0");
     if ((!strncmp("true", prop, sizeof("true")) || atoi(prop))) {
-        ALOGV("DTS_EAGLE_NODE_STREAM (%s): notify_playback_state - is_playing: %d", __func__, is_playing);
+        ALOGV("DTS_EAGLE_NODE_STREAM (%s): notify_playback_state - isPlaying: %d", __func__, isPlaying);
         strlcpy(path, STATE_NOTIFY_FILE, sizeof(path));
-        snprintf(value, sizeof(value), "%d", stream_out);
+        snprintf(value, sizeof(value), "%d", streamOut);
         strlcat(path, value, sizeof(path));
         if ((fd=open(path, O_TRUNC|O_WRONLY)) < 0) {
             ALOGE("DTS_EAGLE_NODE_STREAM (%s): open state notifier node failed", __func__);
         } else {
             snprintf(buf, sizeof(buf), "has_video=%d;sample_rate=%d;channel_mode=%d;playback_state=%d;hpx_processed=%d",
-                     has_video, sample_rate, channels, is_playing, is_hpx_preprocessed);
+                     hasVideo, sampleRate, channels, isPlaying, isHpxPreprocessed);
             int n = write(fd, buf, strlen(buf));
             if (n > 0)
                 ALOGV("DTS_EAGLE_NODE_STREAM (%s): write to state notifier node successful, bytes written: %d", __func__, n);
@@ -394,17 +379,17 @@ void audio_extn_dts_notify_playback_state(int stream_out, int has_video, int sam
     }
 }
 
-void audio_extn_dts_remove_state_notifier_node(int stream_out)
+void audio_extn_dts_remove_state_notifier_node(int streamOut)
 {
     char prop[PROPERTY_VALUE_MAX];
     char path[PATH_MAX];
     char value[MAX_LENGTH_OF_INTEGER_IN_STRING];
     int fd;
     property_get("use.dts_eagle", prop, "0");
-    if ((!strncmp("true", prop, sizeof("true")) || atoi(prop)) && (stream_out)) {
-        ALOGV("DTS_EAGLE_NODE_STREAM (%s): remove_state_notifier_node: stream_out - %d", __func__, stream_out);
+    if ((!strncmp("true", prop, sizeof("true")) || atoi(prop)) && (streamOut)) {
+        ALOGV("DTS_EAGLE_NODE_STREAM (%s): remove_state_notifier_node: streamOut - %d", __func__, streamOut);
         strlcpy(path, STATE_NOTIFY_FILE, sizeof(path));
-        snprintf(value, sizeof(value), "%d", stream_out);
+        snprintf(value, sizeof(value), "%d", streamOut);
         strlcat(path, value, sizeof(path));
         if ((fd=open(path, O_RDONLY)) < 0) {
             ALOGV("DTS_EAGLE_NODE_STREAM (%s): open state notifier node failed", __func__);
