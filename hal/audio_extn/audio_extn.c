@@ -141,8 +141,7 @@ void audio_extn_hpx_set_parameters(struct audio_device *adev,
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_HPX, value,
                             sizeof(value));
     if (ret >= 0) {
-        if ((!strncmp("true", value, sizeof("true")) || atoi(value)) ||
-            (!strncmp("ON", value, sizeof("ON"))))
+        if (!strncmp("ON", value, sizeof("ON")))
             hpx_state = true;
 
         if (hpx_state == aextnmod.hpx_enabled)
