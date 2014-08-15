@@ -107,7 +107,7 @@ int audio_extn_dts_eagle_fade(const struct audio_device *adev, bool fade_in) {
     if (strncmp("true", prop, sizeof("true")))
         return 0;
 
-    if(fade_in)
+    if (fade_in)
         return do_DTS_Eagle_params(adev, fade_in_data, false);
     return do_DTS_Eagle_params(adev, fade_out_data, false);
 }
@@ -152,7 +152,7 @@ void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_p
                         do {
                             sscanf(&tmp[idx], "%i", &data[tcnt]);
                             tidx = strcspn(&tmp[idx], ",");
-                            if(idx + tidx >= ret && tcnt < count-1) {
+                            if (idx + tidx >= ret && tcnt < count-1) {
                                 ALOGE("DTS_EAGLE_HAL (%s): malformed multi value string.", __func__);
                                 dts_found = 0;
                                 break;
@@ -161,7 +161,7 @@ void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_p
                             idx += tidx + 1;
                             tidx = 0;
                             tcnt++;
-                        } while(tcnt < count);
+                        } while (tcnt < count);
                     }
                 } else {
                     ALOGE("DTS_EAGLE_HAL (%s): mem alloc for multi count param parse failed.", __func__);
@@ -188,7 +188,7 @@ void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_p
                 dts_found = 0;
                 ret = str_parms_get_str(parms, "id", value, sizeof(value));
                 if (ret >= 0) {
-                    if(sscanf(value, "%x", &id) == 1) {
+                    if (sscanf(value, "%x", &id) == 1) {
                         ret = str_parms_get_str(parms, "size", value, sizeof(value));
                         if (ret >= 0) {
                             size = atoi(value);
@@ -206,13 +206,13 @@ void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_p
                 }
             }
 
-            if(size != (int)(count * sizeof(int)) && dts_found) {
+            if (dts_found && count > 1 && size != (int)(count * sizeof(int))) {
                 ALOGE("DTS_EAGLE_HAL (%s): size/count mismatch (size = %i bytes, count = %i integers/%i bytes).", __func__, size, count, count*sizeof(int));
             } else if (dts_found) {
                 ALOGI("DTS_EAGLE_HAL (%s): param detected: %s", __func__, str_parms_to_str(parms));
                 if (!(*t))
                     *t = (struct dts_eagle_param_desc_alsa*)malloc(sizeof(struct dts_eagle_param_desc_alsa) + size);
-                if(*t) {
+                if (*t) {
                     (*t)->alsa_effect_ID = DTS_EAGLE_MODULE;
                     (*t)->d.id = id;
                     (*t)->d.size = size;
@@ -270,7 +270,7 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
 
         ret = str_parms_get_str(query, "id", value, sizeof(value));
         if (ret >= 0) {
-            if(sscanf(value, "%x", &id) == 1) {
+            if (sscanf(value, "%x", &id) == 1) {
                 ret = str_parms_get_str(query, "size", value, sizeof(value));
                 if (ret >= 0) {
                     size = atoi(value);
@@ -290,7 +290,7 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
         if (dts_found) {
             ALOGI("DTS_EAGLE_HAL (%s): param (get) detected: %s", __func__, str_parms_to_str(query));
             struct dts_eagle_param_desc_alsa *t = (struct dts_eagle_param_desc_alsa *)params;
-            if(t) {
+            if (t) {
                 char buf[chars_4_int*count];
                 t->alsa_effect_ID = DTS_EAGLE_MODULE;
                 t->d.id = id;
