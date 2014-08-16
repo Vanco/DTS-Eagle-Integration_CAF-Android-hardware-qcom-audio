@@ -40,6 +40,7 @@
 #define STATE_NOTIFY_FILE               "/data/data/dts/stream"
 #define DTS_EAGLE_KEY                   "DTS_EAGLE"
 #define MAX_LENGTH_OF_INTEGER_IN_STRING 13
+#define PARAM_GET_MAX_SIZE              512
 
 struct dts_eagle_param_desc_alsa {
     int alsa_effect_ID;
@@ -166,78 +167,78 @@ void audio_extn_dts_eagle_set_parameters(struct audio_device *adev, struct str_p
                 } else {
                     ALOGE("DTS_EAGLE_HAL (%s): mem alloc for multi count param parse failed.", __func__);
                 }
-                if (tmp)
-                    free(tmp);
-            } else {
-                data = malloc(sizeof(int));
-                if (data) {
-                    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_DTS_EAGLE, value, sizeof(value));
-                    if (ret >= 0) {
-                        *data = atoi(value);
-                        dts_found = 1;
-                        count = 1;
-                    } else {
-                        ALOGE("DTS_EAGLE_HAL (%s): malformed value string.", __func__);
-                    }
-                } else {
-                    ALOGE("DTS_EAGLE_HAL (%s): mem alloc for param parse failed.", __func__);
-                }
+                free(tmp);
             }
+        }
 
-            if (dts_found) {
-                dts_found = 0;
-                ret = str_parms_get_str(parms, "id", value, sizeof(value));
+        if (!dts_found) {
+            data = malloc(sizeof(int));
+            if (data) {
+                ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_DTS_EAGLE, value, sizeof(value));
                 if (ret >= 0) {
-                    if (sscanf(value, "%x", &id) == 1) {
-                        ret = str_parms_get_str(parms, "size", value, sizeof(value));
+                    *data = atoi(value);
+                    dts_found = 1;
+                    count = 1;
+                } else {
+                    ALOGE("DTS_EAGLE_HAL (%s): malformed value string.", __func__);
+                }
+            } else {
+                ALOGE("DTS_EAGLE_HAL (%s): mem alloc for param parse failed.", __func__);
+            }
+        }
+
+        if (dts_found) {
+            dts_found = 0;
+            ret = str_parms_get_str(parms, "id", value, sizeof(value));
+            if (ret >= 0) {
+                if (sscanf(value, "%x", &id) == 1) {
+                    ret = str_parms_get_str(parms, "size", value, sizeof(value));
+                    if (ret >= 0) {
+                        size = atoi(value);
+                        ret = str_parms_get_str(parms, "offset", value, sizeof(value));
                         if (ret >= 0) {
-                            size = atoi(value);
-                            ret = str_parms_get_str(parms, "offset", value, sizeof(value));
+                            offset = atoi(value);
+                            ret = str_parms_get_str(parms, "device", value, sizeof(value));
                             if (ret >= 0) {
-                                offset = atoi(value);
-                                ret = str_parms_get_str(parms, "device", value, sizeof(value));
-                                if (ret >= 0) {
-                                    dev = atoi(value);
-                                    dts_found = 1;
-                                }
+                                dev = atoi(value);
+                                dts_found = 1;
                             }
                         }
                     }
                 }
             }
-
-            if (dts_found && count > 1 && size != (int)(count * sizeof(int))) {
-                ALOGE("DTS_EAGLE_HAL (%s): size/count mismatch (size = %i bytes, count = %i integers/%i bytes).", __func__, size, count, count*sizeof(int));
-            } else if (dts_found) {
-                ALOGI("DTS_EAGLE_HAL (%s): param detected: %s", __func__, str_parms_to_str(parms));
-                if (!(*t))
-                    *t = (struct dts_eagle_param_desc_alsa*)malloc(sizeof(struct dts_eagle_param_desc_alsa) + size);
-                if (*t) {
-                    (*t)->alsa_effect_ID = DTS_EAGLE_MODULE;
-                    (*t)->d.id = id;
-                    (*t)->d.size = size;
-                    (*t)->d.offset = offset;
-                    (*t)->d.device = dev;
-                    memcpy((void*)((char*)*t + sizeof(struct dts_eagle_param_desc_alsa)), data, size);
-                    ALOGD("DTS_EAGLE_HAL (%s): id: 0x%X, size: %d, offset: %d, device: %d", __func__,
-                           (*t)->d.id, (*t)->d.size, (*t)->d.offset, (*t)->d.device);
-                    if (!fade_in) {
-                        ret = do_DTS_Eagle_params(adev, *t, false);
-                        if (ret < 0)
-                            ALOGE("DTS_EAGLE_HAL (%s): failed setting params in kernel with error %i", __func__, ret);
-                    }
-                    free(t2);
-                } else {
-                    ALOGE("DTS_EAGLE_HAL (%s): mem alloc for dsp structure failed.", __func__);
-                }
-            } else {
-                ALOGE("DTS_EAGLE_HAL (%s): param detected but failed parse: %s", __func__, str_parms_to_str(parms));
-            }
-            free(data);
         }
+
+        if (dts_found && count > 1 && size != (int)(count * sizeof(int))) {
+            ALOGE("DTS_EAGLE_HAL (%s): size/count mismatch (size = %i bytes, count = %i integers/%i bytes).", __func__, size, count, count*sizeof(int));
+        } else if (dts_found) {
+            ALOGI("DTS_EAGLE_HAL (%s): param detected: %s", __func__, str_parms_to_str(parms));
+            if (!(*t))
+                *t = (struct dts_eagle_param_desc_alsa*)malloc(sizeof(struct dts_eagle_param_desc_alsa) + size);
+            if (*t) {
+                (*t)->alsa_effect_ID = DTS_EAGLE_MODULE;
+                (*t)->d.id = id;
+                (*t)->d.size = size;
+                (*t)->d.offset = offset;
+                (*t)->d.device = dev;
+                memcpy((void*)((char*)*t + sizeof(struct dts_eagle_param_desc_alsa)), data, size);
+                ALOGD("DTS_EAGLE_HAL (%s): id: 0x%X, size: %d, offset: %d, device: %d", __func__,
+                       (*t)->d.id, (*t)->d.size, (*t)->d.offset, (*t)->d.device);
+                if (!fade_in) {
+                    ret = do_DTS_Eagle_params(adev, *t, false);
+                    if (ret < 0)
+                        ALOGE("DTS_EAGLE_HAL (%s): failed setting params in kernel with error %i", __func__, ret);
+                }
+                free(t2);
+            } else {
+                ALOGE("DTS_EAGLE_HAL (%s): mem alloc for dsp structure failed.", __func__);
+            }
+        } else {
+            ALOGE("DTS_EAGLE_HAL (%s): param detected but failed parse: %s", __func__, str_parms_to_str(parms));
+        }
+        free(data);
     }
 
-exit:
     ALOGV("DTS_EAGLE_HAL (%s): exit", __func__);
 }
 
@@ -245,7 +246,7 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                   struct str_parms *query, struct str_parms *reply) {
     int ret, val;
     char value[32] = { 0 }, prop[PROPERTY_VALUE_MAX];
-    char params[512];
+    char params[PARAM_GET_MAX_SIZE];
 
     ALOGI("DTS_EAGLE_HAL (%s): enter", __func__);
 
@@ -299,8 +300,8 @@ int audio_extn_dts_eagle_get_parameters(const struct audio_device *adev,
                 t->d.device = dev | DTS_EAGLE_FLAG_ALSA_GET;
                 ALOGV("DTS_EAGLE_HAL (%s): id (get): 0x%X, size: %d, offset: %d, device: %d", __func__,
                        t->d.id, t->d.size, t->d.offset, t->d.device & 0x7FFFFFFF);
-                if ((sizeof(struct dts_eagle_param_desc_alsa) + size) > 512) {
-                    ALOGE("%s: requested data too large, just return", __func__);
+                if ((sizeof(struct dts_eagle_param_desc_alsa) + size) > PARAM_GET_MAX_SIZE) {
+                    ALOGE("%s: requested data too large", __func__);
                     return -1;
                 }
                 ret = do_DTS_Eagle_params(adev, t, true);

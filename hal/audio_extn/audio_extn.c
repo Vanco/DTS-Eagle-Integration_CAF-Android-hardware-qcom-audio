@@ -128,6 +128,7 @@ void audio_extn_customstereo_set_parameters(struct audio_device *adev,
 
 #ifndef DTS_EAGLE
 #define audio_extn_hpx_set_parameters(adev, parms)         (0)
+#define audio_extn_check_and_set_dts_hpx_state(adev)       (0)
 #else
 void audio_extn_hpx_set_parameters(struct audio_device *adev,
                                    struct str_parms *parms)
@@ -156,6 +157,12 @@ void audio_extn_hpx_set_parameters(struct audio_device *adev,
         if (adev->offload_effects_set_hpx_state != NULL)
             adev->offload_effects_set_hpx_state(hpx_state);
     }
+}
+
+void audio_extn_check_and_set_dts_hpx_state(struct audio_device *adev)
+{
+    if (aextnmod.hpx_enabled && adev->offload_effects_set_hpx_state)
+        adev->offload_effects_set_hpx_state(aextnmod.hpx_enabled);
 }
 #endif
 
