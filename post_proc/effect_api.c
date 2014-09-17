@@ -25,6 +25,24 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This file was modified by DTS, Inc. The portions of the
+ * code modified by DTS, Inc are copyrighted and
+ * licensed separately, as follows:
+ *
+ * (C) 2014 DTS, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #define LOG_TAG "offload_effect_api"
@@ -36,6 +54,11 @@
 #include <sound/audio_effects.h>
 
 #include "effect_api.h"
+
+#ifdef DTS_EAGLE
+  #include "effect_util.h"
+  int pcm_dev_id = 9;
+#endif
 
 #define ARRAY_SIZE(array) (sizeof array / sizeof array[0])
 
@@ -108,6 +131,10 @@ void offload_bassboost_set_enable_flag(struct bass_boost_params *bassboost,
 {
     ALOGV("%s", __func__);
     bassboost->enable_flag = enable;
+
+#ifdef DTS_EAGLE
+    update_effects_node(pcm_dev_id, 2, 1, enable,0,0,0);
+#endif
 }
 
 int offload_bassboost_get_enable_flag(struct bass_boost_params *bassboost)
@@ -121,6 +148,10 @@ void offload_bassboost_set_strength(struct bass_boost_params *bassboost,
 {
     ALOGV("%s", __func__);
     bassboost->strength = strength;
+
+#ifdef DTS_EAGLE
+    update_effects_node(pcm_dev_id, 2, 0, 0, strength, 0 , 0);
+#endif
 }
 
 void offload_bassboost_set_mode(struct bass_boost_params *bassboost,
@@ -184,6 +215,10 @@ void offload_virtualizer_set_enable_flag(struct virtualizer_params *virtualizer,
 {
     ALOGV("%s", __func__);
     virtualizer->enable_flag = enable;
+
+#ifdef DTS_EAGLE
+    update_effects_node(pcm_dev_id, 1, 1, enable, 0, 0 , 0);
+#endif
 }
 
 int offload_virtualizer_get_enable_flag(struct virtualizer_params *virtualizer)
@@ -197,6 +232,10 @@ void offload_virtualizer_set_strength(struct virtualizer_params *virtualizer,
 {
     ALOGV("%s", __func__);
     virtualizer->strength = strength;
+
+#ifdef DTS_EAGLE
+    update_effects_node(pcm_dev_id, 1, 0, 0, strength, 0 , 0);
+#endif
 }
 
 void offload_virtualizer_set_out_type(struct virtualizer_params *virtualizer,
@@ -273,6 +312,10 @@ void offload_eq_set_enable_flag(struct eq_params *eq, bool enable)
 {
     ALOGV("%s", __func__);
     eq->enable_flag = enable;
+
+#ifdef DTS_EAGLE
+    update_effects_node(pcm_dev_id, 0, 1, enable, 0, 0, 0);
+#endif
 }
 
 int offload_eq_get_enable_flag(struct eq_params *eq)
@@ -302,6 +345,10 @@ void offload_eq_set_bands_level(struct eq_params *eq, int num_bands,
         eq->per_band_cfg[i].gain_millibels = band_gain_list[i] * 100;
         eq->per_band_cfg[i].quality_factor = Q8_UNITY;
     }
+
+#ifdef DTS_EAGLE
+        update_effects_node(pcm_dev_id, 0, 0, 0, 0, i, band_gain_list[i] * 100);
+#endif
 }
 
 int offload_eq_send_params(struct mixer_ctl *ctl, struct eq_params eq,
