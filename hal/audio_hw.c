@@ -1219,6 +1219,8 @@ int start_output_stream(struct stream_out *out)
             adev->visualizer_start_output(out->handle, out->pcm_device_id);
         if (adev->offload_effects_start_output != NULL)
             adev->offload_effects_start_output(out->handle, out->pcm_device_id);
+
+        audio_extn_check_and_set_dts_hpx_state(adev);
     }
     ALOGV("%s: exit", __func__);
     return 0;
@@ -2302,8 +2304,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
                 config->offload_info.bit_rate);
         //Decide if we need to use gapless mode by default
         check_and_set_gapless_mode(adev);
-
-        audio_extn_check_and_set_dts_hpx_state(adev);
     } else if (out->flags & AUDIO_OUTPUT_FLAG_INCALL_MUSIC) {
         ret = voice_check_and_set_incall_music_usecase(adev, out);
         if (ret != 0) {

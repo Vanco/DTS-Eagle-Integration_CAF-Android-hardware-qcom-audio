@@ -149,13 +149,14 @@ void audio_extn_hpx_set_parameters(struct audio_device *adev,
             return;
 
         aextnmod.hpx_enabled = hpx_state;
+        /* set HPX state on stream pp */
+        if (adev->offload_effects_set_hpx_state != NULL)
+            adev->offload_effects_set_hpx_state(hpx_state);
 
+        /* set HPX state on device pp */
         ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
         if (ctl)
             mixer_ctl_set_value(ctl, 0, aextnmod.hpx_enabled);
-
-        if (adev->offload_effects_set_hpx_state != NULL)
-            adev->offload_effects_set_hpx_state(hpx_state);
     }
 }
 
