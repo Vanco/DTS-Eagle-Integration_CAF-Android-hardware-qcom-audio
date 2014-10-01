@@ -32,13 +32,13 @@
 #include "platform.h"
 #include "platform_api.h"
 
-
 #ifdef DTS_EAGLE
 
 #define AUDIO_PARAMETER_KEY_DTS_EAGLE   "DTS_EAGLE"
 #define ROUTE_FILE                      "data/data/dts/route"
 #define STATE_NOTIFY_FILE               "/data/data/dts/stream"
 #define DTS_EAGLE_KEY                   "DTS_EAGLE"
+#define DEVICE_NODE                     "/dev/snd/hwC0D3"
 #define MAX_LENGTH_OF_INTEGER_IN_STRING 13
 #define PARAM_GET_MAX_SIZE              512
 
@@ -83,7 +83,7 @@ static int do_DTS_Eagle_params_stream(struct stream_out *out, struct dts_eagle_p
 static int do_DTS_Eagle_params(const struct audio_device *adev, struct dts_eagle_param_desc_alsa *t, bool get) {
     struct listnode *node;
     struct audio_usecase *usecase;
-    int ret = 0;
+    int ret = 0, sent = 0;
 
     ALOGI("DTS_EAGLE_HAL (%s): enter", __func__);
 
@@ -94,6 +94,34 @@ static int do_DTS_Eagle_params(const struct audio_device *adev, struct dts_eagle
             int tret = do_DTS_Eagle_params_stream(usecase->stream.out, t, get);
             if (tret < 0)
                 ret = tret;
+            else
+                sent = 1;
+        }
+    }
+
+    if (!sent) {
+        int fd = open(DEVICE_NODE, O_RDWR);
+
+        if (get) {
+            ALOGD("DTS_EAGLE_HAL (%s): no stream opened, attempting to retrieve directly from cache", __func__);
+            t->d.device &= ~DTS_EAGLE_FLAG_ALSA_GET;
+        } else {
+            ALOGD("DTS_EAGLE_HAL (%s): no stream opened, attempting to send directly to cache", __func__);
+            t->d.device |= DTS_EAGLE_FLAG_IOCTL_JUSTSETCACHE;
+        }
+
+        if (fd > 0) {
+            int cmd = get ? DTS_EAGLE_IOCTL_GET_PARAM : DTS_EAGLE_IOCTL_SET_PARAM;
+            if (ioctl(fd, cmd, &t->d) < 0) {
+                ALOGE("DTS_EAGLE_HAL (%s): error sending/getting param\n", __func__);
+                ret = -EINVAL;
+            } else {
+                ALOGD("DTS_EAGLE_HAL (%s): sent/retrieved param\n", __func__);
+            }
+            close(fd);
+        } else {
+            ALOGE("DTS_EAGLE_HAL (%s): couldn't open device %s\n", __func__, DEVICE_NODE);
+            ret = -EINVAL;
         }
     }
     return ret;
