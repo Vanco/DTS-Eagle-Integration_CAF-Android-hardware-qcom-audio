@@ -42,6 +42,7 @@ struct audio_device;
 struct str_parms;
 struct stream_in;
 struct stream_out;
+typedef int audio_usecase_t;
 
 struct call_state {
     int current;
@@ -60,7 +61,8 @@ struct voice {
     int tty_mode;
     bool mic_mute;
     float volume;
-    bool voice_device_set;
+    bool is_in_call;
+    bool in_call;
 };
 
 enum {
@@ -70,6 +72,9 @@ enum {
     INCALL_REC_UPLINK_AND_DOWNLINK,
 };
 
+int voice_start_usecase(struct audio_device *adev, audio_usecase_t usecase_id);
+int voice_stop_usecase(struct audio_device *adev, audio_usecase_t usecase_id);
+
 int voice_start_call(struct audio_device *adev);
 int voice_stop_call(struct audio_device *adev);
 int voice_set_parameters(struct audio_device *adev, struct str_parms *parms);
@@ -77,6 +82,7 @@ void voice_get_parameters(struct audio_device *adev, struct str_parms *query,
                           struct str_parms *reply);
 void voice_init(struct audio_device *adev);
 bool voice_is_in_call(struct audio_device *adev);
+bool voice_is_in_call_rec_stream(struct stream_in *in);
 int voice_set_mic_mute(struct audio_device *dev, bool state);
 bool voice_get_mic_mute(struct audio_device *dev);
 int voice_set_volume(struct audio_device *adev, float volume);

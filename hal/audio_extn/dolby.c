@@ -64,7 +64,7 @@
 
 /* DS1-DDP Endp Params */
 #define DDP_ENDP_NUM_PARAMS 17
-#define DDP_ENDP_NUM_DEVICES 23
+#define DDP_ENDP_NUM_DEVICES 21
 static int ddp_endp_params_id[DDP_ENDP_NUM_PARAMS] = {
     PARAM_ID_MAX_OUTPUT_CHANNELS, PARAM_ID_CTL_RUNNING_MODE,
     PARAM_ID_CTL_ERROR_CONCEAL, PARAM_ID_CTL_ERROR_MAX_RPTS,
@@ -140,12 +140,6 @@ static struct ddp_endp_params {
           {AUDIO_DEVICE_OUT_FM_TX, 2,
               {8, 0, 0, 0, 0, 0, 0, 21, 1, 6, 0, 0, 0, 0, 0, 0, 0},
               {1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0} },
-          {AUDIO_DEVICE_OUT_ANC_HEADSET, 2,
-              {8, 0, 0, 0, 0, 0, 0, 21, 1, 6, 0, 0, 0, 0, 0, 0, 0},
-              {1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0} },
-          {AUDIO_DEVICE_OUT_ANC_HEADPHONE, 2,
-              {8, 0, 0, 0, 0, 0, 0, 21, 1, 6, 0, 0, 0, 0, 0, 0, 0},
-              {1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0} },
           {AUDIO_DEVICE_OUT_PROXY, 2,
               {8, 0, 0, 0, 0, 0, 0, 21, 1, 2, 0, 0, 0, 0, 0, 0, 0},
               {1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0} },
@@ -193,7 +187,7 @@ int update_ddp_endp_table(int device, int dev_ch_cap, int param_id,
 
 void send_ddp_endp_params_stream(struct stream_out *out,
                                  int device, int dev_ch_cap,
-                                 bool set_cache)
+                                 bool set_cache __unused)
 {
     int idx, i;
     int ddp_endp_params_data[2*DDP_ENDP_NUM_PARAMS + 1];
@@ -249,7 +243,7 @@ void send_ddp_endp_params(struct audio_device *adev,
             (usecase->devices & ddp_dev) &&
             (usecase->stream.out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) &&
             ((usecase->stream.out->format == AUDIO_FORMAT_AC3) ||
-             (usecase->stream.out->format == AUDIO_FORMAT_EAC3))) {
+             (usecase->stream.out->format == AUDIO_FORMAT_E_AC3))) {
             send_ddp_endp_params_stream(usecase->stream.out, ddp_dev,
                                         dev_ch_cap, false /* set cache */);
         }
@@ -266,7 +260,7 @@ void audio_extn_dolby_send_ddp_endp_params(struct audio_device *adev)
             (usecase->devices & AUDIO_DEVICE_OUT_ALL) &&
             (usecase->stream.out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) &&
             ((usecase->stream.out->format == AUDIO_FORMAT_AC3) ||
-             (usecase->stream.out->format == AUDIO_FORMAT_EAC3))) {
+             (usecase->stream.out->format == AUDIO_FORMAT_E_AC3))) {
             /*
              * Use wfd /hdmi sink channel cap for dolby params if device is wfd
              * or hdmi. Otherwise use stereo configuration
@@ -287,6 +281,15 @@ void audio_extn_ddp_set_parameters(struct audio_device *adev,
     int ddp_dev, dev_ch_cap;
     int val, ret;
     char value[32]={0};
+
+    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_SND_CARD_STATUS, value,
+                            sizeof(value));
+    if (ret >= 0) {
+        char *snd_card_status = value + 2;
+        if (strncmp(snd_card_status, "ONLINE", sizeof("ONLINE")) == 0)
+            audio_extn_dolby_set_license(adev);
+    }
+
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_DDP_DEV, value,
                             sizeof(value));
     if (ret >= 0) {
@@ -373,7 +376,7 @@ int audio_extn_dolby_get_snd_codec_id(struct audio_device *adev,
         audio_extn_dolby_set_dmid(adev);
 #endif
         break;
-    case AUDIO_FORMAT_EAC3:
+    case AUDIO_FORMAT_E_AC3:
         id = SND_AUDIOCODEC_EAC3;
         send_ddp_endp_params_stream(out, out->devices,
                             channel_cap, true /* set_cache */);
@@ -391,7 +394,7 @@ int audio_extn_dolby_get_snd_codec_id(struct audio_device *adev,
 bool audio_extn_is_dolby_format(audio_format_t format)
 {
     if (format == AUDIO_FORMAT_AC3 ||
-            format == AUDIO_FORMAT_EAC3)
+            format == AUDIO_FORMAT_E_AC3)
         return true;
     else
         return false;
@@ -467,6 +470,31 @@ void audio_extn_dolby_set_dmid(struct audio_device *adev)
     ret = mixer_ctl_set_value(ctl, 0, i_dmid);
     if (ret)
         ALOGE("%s: Dolby DMID cannot be set error:%d",__func__, ret);
+
+    return;
+}
+
+void audio_extn_dolby_set_license(struct audio_device *adev)
+{
+    int ret, key=0;
+    char value[128] = {0};
+    struct mixer_ctl *ctl;
+    const char *mixer_ctl_name = "DS1 License";
+
+    ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
+    if (!ctl) {
+        ALOGE("%s: Could not get ctl for mixer cmd - %s",
+              __func__, mixer_ctl_name);
+        return;
+    }
+
+    property_get("audio.ds1.metainfo.key",value,"0");
+    key = atoi(value);
+
+    ALOGV("%s Setting DS1 License, key:0x%x",__func__, key);
+    ret = mixer_ctl_set_value(ctl, 0, key);
+    if (ret)
+        ALOGE("%s: cannot set license, error:%d",__func__, ret);
 
     return;
 }

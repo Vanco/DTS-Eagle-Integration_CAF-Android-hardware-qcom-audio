@@ -15,24 +15,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This file was modified by DTS, Inc. The portions of the
- * code modified by DTS, Inc are copyrighted and
- * licensed separately, as follows:
- *
- * (C) 2014 DTS, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 #define LOG_TAG "audio_hw_extn"
@@ -57,7 +39,6 @@ struct audio_extn_module {
     bool aanc_enabled;
     bool custom_stereo_enabled;
     uint32_t proxy_channel_num;
-    bool hpx_enabled;
 };
 
 static struct audio_extn_module aextnmod = {
@@ -65,14 +46,14 @@ static struct audio_extn_module aextnmod = {
     .aanc_enabled = 0,
     .custom_stereo_enabled = 0,
     .proxy_channel_num = 2,
-    .hpx_enabled = 0,
 };
 
 #define AUDIO_PARAMETER_KEY_ANC        "anc_enabled"
 #define AUDIO_PARAMETER_KEY_WFD        "wfd_channel_cap"
 #define AUDIO_PARAMETER_CAN_OPEN_PROXY "can_open_proxy"
 #define AUDIO_PARAMETER_CUSTOM_STEREO  "stereo_as_dual_mono"
-#define AUDIO_PARAMETER_HPX            "HPX"
+/* Query offload playback instances count */
+#define AUDIO_PARAMETER_OFFLOAD_NUM_ACTIVE "offload_num_active"
 
 #ifndef FM_ENABLED
 #define audio_extn_fm_set_parameters(adev, parms) (0)
@@ -81,7 +62,7 @@ void audio_extn_fm_set_parameters(struct audio_device *adev,
                                    struct str_parms *parms);
 #endif
 #ifndef HFP_ENABLED
-void audio_extn_hfp_set_parameters(adev, parms) (0)
+#define audio_extn_hfp_set_parameters(adev, parms) (0)
 #else
 void audio_extn_hfp_set_parameters(struct audio_device *adev,
                                            struct str_parms *parms);
@@ -125,47 +106,6 @@ void audio_extn_customstereo_set_parameters(struct audio_device *adev,
     }
 }
 #endif /* CUSTOM_STEREO_ENABLED */
-
-#ifndef DTS_EAGLE
-#define audio_extn_hpx_set_parameters(adev, parms)         (0)
-#define audio_extn_check_and_set_dts_hpx_state(adev)       (0)
-#else
-void audio_extn_hpx_set_parameters(struct audio_device *adev,
-                                   struct str_parms *parms)
-{
-    int ret = 0;
-    char value[32]={0};
-    bool hpx_state = false;
-    const char *mixer_ctl_name = "Set HPX OnOff";
-    struct mixer_ctl *ctl = NULL;
-    ALOGV("%s", __func__);
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_HPX, value,
-                            sizeof(value));
-    if (ret >= 0) {
-        if (!strncmp("ON", value, sizeof("ON")))
-            hpx_state = true;
-
-        if (hpx_state == aextnmod.hpx_enabled)
-            return;
-
-        aextnmod.hpx_enabled = hpx_state;
-        /* set HPX state on stream pp */
-        if (adev->offload_effects_set_hpx_state != NULL)
-            adev->offload_effects_set_hpx_state(hpx_state);
-
-        /* set HPX state on device pp */
-        ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
-        if (ctl)
-            mixer_ctl_set_value(ctl, 0, aextnmod.hpx_enabled);
-    }
-}
-
-void audio_extn_check_and_set_dts_hpx_state(struct audio_device *adev)
-{
-    if (aextnmod.hpx_enabled && adev->offload_effects_set_hpx_state)
-        adev->offload_effects_set_hpx_state(aextnmod.hpx_enabled);
-}
-#endif
 
 #ifndef ANC_HEADSET_ENABLED
 #define audio_extn_set_anc_parameters(adev, parms)       (0)
@@ -270,7 +210,7 @@ void audio_extn_set_fluence_parameters(struct audio_device *adev,
     }
 }
 
-int audio_extn_get_fluence_parameters(struct audio_device *adev,
+int audio_extn_get_fluence_parameters(const struct audio_device *adev,
                        struct str_parms *query, struct str_parms *reply)
 {
     int ret = 0, err;
@@ -486,6 +426,30 @@ int32_t audio_extn_get_afe_proxy_channel_count()
 
 #endif /* AFE_PROXY_ENABLED */
 
+static int get_active_offload_usecases(const struct audio_device *adev,
+                                       struct str_parms *query,
+                                       struct str_parms *reply)
+{
+    int ret, count = 0;
+    char value[32]={0};
+    struct listnode *node;
+    struct audio_usecase *usecase;
+
+    ALOGV("%s", __func__);
+    ret = str_parms_get_str(query, AUDIO_PARAMETER_OFFLOAD_NUM_ACTIVE, value,
+                            sizeof(value));
+    if (ret >= 0) {
+        list_for_each(node, &adev->usecase_list) {
+            usecase = node_to_item(node, struct audio_usecase, list);
+            if (is_offload_usecase(usecase->id))
+                count++;
+        }
+        ALOGV("%s, number of active offload usecases: %d", __func__, count);
+        str_parms_add_int(reply, AUDIO_PARAMETER_OFFLOAD_NUM_ACTIVE, count);
+    }
+    return ret;
+}
+
 void audio_extn_set_parameters(struct audio_device *adev,
                                struct str_parms *parms)
 {
@@ -493,12 +457,11 @@ void audio_extn_set_parameters(struct audio_device *adev,
    audio_extn_set_fluence_parameters(adev, parms);
    audio_extn_set_afe_proxy_parameters(adev, parms);
    audio_extn_fm_set_parameters(adev, parms);
+   audio_extn_sound_trigger_set_parameters(adev, parms);
    audio_extn_listen_set_parameters(adev, parms);
    audio_extn_hfp_set_parameters(adev, parms);
-   audio_extn_dts_eagle_set_parameters(adev, parms);
    audio_extn_ddp_set_parameters(adev, parms);
    audio_extn_customstereo_set_parameters(adev, parms);
-   audio_extn_hpx_set_parameters(adev, parms);
 }
 
 void audio_extn_get_parameters(const struct audio_device *adev,
@@ -508,7 +471,7 @@ void audio_extn_get_parameters(const struct audio_device *adev,
     char *kv_pairs = NULL;
     audio_extn_get_afe_proxy_parameters(query, reply);
     audio_extn_get_fluence_parameters(adev, query, reply);
-    audio_extn_dts_eagle_get_parameters(adev, query, reply);
+    get_active_offload_usecases(adev, query, reply);
 
     kv_pairs = str_parms_to_str(reply);
     ALOGD_IF(kv_pairs != NULL, "%s: returns %s", __func__, kv_pairs);

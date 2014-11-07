@@ -15,24 +15,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This file was modified by DTS, Inc. The portions of the
- * code modified by DTS, Inc are copyrighted and
- * licensed separately, as follows:
- *
- * (C) 2014 DTS, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 #define LOG_TAG "offload_effect_bundle"
@@ -49,10 +31,6 @@
 #include "bass_boost.h"
 #include "virtualizer.h"
 #include "reverb.h"
-
-#ifdef DTS_EAGLE
-#include "effect_util.h"
-#endif
 
 enum {
     EFFECT_STATE_UNINITIALIZED,
@@ -143,6 +121,7 @@ void add_effect_to_output(output_context_t * output, effect_context_t *context)
 {
     struct listnode *fx_node;
 
+    ALOGV("%s: e_ctxt %p, o_ctxt %p", __func__, context, output);
     list_for_each(fx_node, &output->effects_list) {
         effect_context_t *fx_ctxt = node_to_item(fx_node,
                                                  effect_context_t,
@@ -161,6 +140,7 @@ void remove_effect_from_output(output_context_t * output,
 {
     struct listnode *fx_node;
 
+    ALOGV("%s: e_ctxt %p, o_ctxt %p", __func__, context, output);
     list_for_each(fx_node, &output->effects_list) {
         effect_context_t *fx_ctxt = node_to_item(fx_node,
                                                  effect_context_t,
@@ -206,12 +186,9 @@ int offload_effects_bundle_hal_start_output(audio_io_handle_t output, int pcm_id
     int ret = 0;
     struct listnode *node;
     char mixer_string[128];
+    output_context_t * out_ctxt = NULL;
 
     ALOGV("%s output %d pcm_id %d", __func__, output, pcm_id);
-
-#ifdef DTS_EAGLE
-    create_effect_state_node(pcm_id);
-#endif
 
     if (lib_init() != 0)
         return init_status;
@@ -223,8 +200,13 @@ int offload_effects_bundle_hal_start_output(audio_io_handle_t output, int pcm_id
         goto exit;
     }
 
-    output_context_t *out_ctxt = (output_context_t *)
+    out_ctxt = (output_context_t *)
                                  malloc(sizeof(output_context_t));
+    if (!out_ctxt) {
+        ALOGE("%s fail to allocate for output context", __func__);
+        ret = -ENOMEM;
+        goto exit;
+    }
     out_ctxt->handle = output;
     out_ctxt->pcm_device_id = pcm_id;
 
@@ -236,6 +218,7 @@ int offload_effects_bundle_hal_start_output(audio_io_handle_t output, int pcm_id
         ALOGE("Failed to open mixer");
         out_ctxt->ctl = NULL;
         ret = -EINVAL;
+        free(out_ctxt);
         goto exit;
     } else {
         out_ctxt->ctl = mixer_get_ctl_by_name(out_ctxt->mixer, mixer_string);
@@ -244,6 +227,7 @@ int offload_effects_bundle_hal_start_output(audio_io_handle_t output, int pcm_id
             mixer_close(out_ctxt->mixer);
             out_ctxt->mixer = NULL;
             ret = -EINVAL;
+            free(out_ctxt);
             goto exit;
         }
     }
@@ -300,10 +284,6 @@ int offload_effects_bundle_hal_stop_output(audio_io_handle_t output, int pcm_id)
     }
 
     list_remove(&out_ctxt->outputs_list_node);
-
-#ifdef DTS_EAGLE
-    remove_effect_state_node(pcm_id);
-#endif
 
     free(out_ctxt);
 
@@ -362,6 +342,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
         sizeof(effect_uuid_t)) == 0) {
         equalizer_context_t *eq_ctxt = (equalizer_context_t *)
                                        calloc(1, sizeof(equalizer_context_t));
+        if (eq_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)eq_ctxt;
         context->ops.init = equalizer_init;
         context->ops.reset = equalizer_reset;
@@ -379,6 +362,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
                sizeof(effect_uuid_t)) == 0) {
         bassboost_context_t *bass_ctxt = (bassboost_context_t *)
                                          calloc(1, sizeof(bassboost_context_t));
+        if (bass_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)bass_ctxt;
         context->ops.init = bassboost_init;
         context->ops.reset = bassboost_reset;
@@ -396,6 +382,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
                sizeof(effect_uuid_t)) == 0) {
         virtualizer_context_t *virt_ctxt = (virtualizer_context_t *)
                                            calloc(1, sizeof(virtualizer_context_t));
+        if (virt_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)virt_ctxt;
         context->ops.init = virtualizer_init;
         context->ops.reset = virtualizer_reset;
@@ -419,6 +408,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
                 sizeof(effect_uuid_t)) == 0)) {
         reverb_context_t *reverb_ctxt = (reverb_context_t *)
                                         calloc(1, sizeof(reverb_context_t));
+        if (reverb_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)reverb_ctxt;
         context->ops.init = reverb_init;
         context->ops.reset = reverb_reset;
@@ -542,16 +534,16 @@ int effect_process(effect_handle_t self,
     effect_context_t * context = (effect_context_t *)self;
     int status = 0;
 
-    ALOGW("%s Called ?????", __func__);
+    ALOGW("%s: ctxt %p, Called ?????", __func__, context);
 
     pthread_mutex_lock(&lock);
     if (!effect_exists(context)) {
-        status = -EINVAL;
+        status = -ENOSYS;
         goto exit;
     }
 
     if (context->state != EFFECT_STATE_ACTIVE) {
-        status = -EINVAL;
+        status = -ENODATA;
         goto exit;
     }
 
@@ -571,12 +563,13 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
     pthread_mutex_lock(&lock);
 
     if (!effect_exists(context)) {
-        status = -EINVAL;
+        status = -ENOSYS;
         goto exit;
     }
 
+    ALOGV("%s: ctxt %p, cmd %d", __func__, context, cmdCode);
     if (context == NULL || context->state == EFFECT_STATE_UNINITIALIZED) {
-        status = -EINVAL;
+        status = -ENOSYS;
         goto exit;
     }
 
@@ -628,7 +621,6 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         context->state = EFFECT_STATE_ACTIVE;
         if (context->ops.enable)
             context->ops.enable(context);
-        ALOGV("%s EFFECT_CMD_ENABLE", __func__);
         *(int *)pReplyData = 0;
         break;
     case EFFECT_CMD_DISABLE:
@@ -643,7 +635,6 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         context->state = EFFECT_STATE_INITIALIZED;
         if (context->ops.disable)
             context->ops.disable(context);
-        ALOGV("%s EFFECT_CMD_DISABLE", __func__);
         *(int *)pReplyData = 0;
         break;
     case EFFECT_CMD_GET_PARAM: {
@@ -653,7 +644,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
             *replySize < (int)(sizeof(effect_param_t) + sizeof(uint32_t) +
                                sizeof(uint16_t))) {
             status = -EINVAL;
-            ALOGV("EFFECT_CMD_GET_PARAM invalid command cmdSize %d *replySize %d",
+            ALOGW("EFFECT_CMD_GET_PARAM invalid command cmdSize %d *replySize %d",
                   cmdSize, *replySize);
             goto exit;
         }
@@ -673,7 +664,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
                             sizeof(uint16_t)) ||
             pReplyData == NULL || *replySize != sizeof(int32_t)) {
             status = -EINVAL;
-            ALOGV("EFFECT_CMD_SET_PARAM invalid command cmdSize %d *replySize %d",
+            ALOGW("EFFECT_CMD_SET_PARAM invalid command cmdSize %d *replySize %d",
                   cmdSize, *replySize);
             goto exit;
         }
@@ -689,7 +680,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         ALOGV("\t EFFECT_CMD_SET_DEVICE start");
         if (pCmdData == NULL || cmdSize < sizeof(uint32_t)) {
             status = -EINVAL;
-            ALOGV("EFFECT_CMD_SET_DEVICE invalid command cmdSize %d", cmdSize);
+            ALOGW("EFFECT_CMD_SET_DEVICE invalid command cmdSize %d", cmdSize);
             goto exit;
         }
         device = *(uint32_t *)pCmdData;
@@ -705,7 +696,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
 
         if (cmdSize != sizeof(effect_offload_param_t) || pCmdData == NULL
                 || pReplyData == NULL || *replySize != sizeof(int)) {
-            ALOGV("%s EFFECT_CMD_OFFLOAD bad format", __func__);
+            ALOGW("%s EFFECT_CMD_OFFLOAD bad format", __func__);
             status = -EINVAL;
             break;
         }
@@ -764,6 +755,9 @@ int effect_get_descriptor(effect_handle_t   self,
     return 0;
 }
 
+bool effect_is_active(effect_context_t * ctxt) {
+    return ctxt->state == EFFECT_STATE_ACTIVE;
+}
 
 /* effect_handle_t interface implementation for offload effects */
 const struct effect_interface_s effect_interface = {

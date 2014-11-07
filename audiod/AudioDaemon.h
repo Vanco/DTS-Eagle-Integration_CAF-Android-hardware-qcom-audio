@@ -1,6 +1,6 @@
 /* AudioDaemon.h
 
-Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -40,7 +40,21 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 
 namespace android {
 
-enum snd_card_status { snd_card_online, snd_card_offline};
+enum notify_status {
+    snd_card_online,
+    snd_card_offline,
+    cpe_online,
+    cpe_offline
+};
+
+enum notify_status_type {
+    SND_CARD_STATE,
+    CPE_STATE
+};
+
+enum audio_event_status {audio_event_on, audio_event_off};
+
+#define AUDIO_PARAMETER_KEY_EXT_AUDIO_DEVICE "ext_audio_device"
 
 class AudioDaemon:public Thread, public IBinder :: DeathRecipient
 {
@@ -51,10 +65,16 @@ class AudioDaemon:public Thread, public IBinder :: DeathRecipient
     virtual void        binderDied(const wp < IBinder > &who);
 
     bool processUeventMessage();
-    void notifyAudioSystem(int snd_card, snd_card_status status);
+    void notifyAudioSystem(int snd_card,
+                           notify_status status,
+                           notify_status_type type);
+    void notifyAudioSystemEventStatus(const char* event, audio_event_status status);
     int mUeventSock;
     bool getStateFDs(std::vector<std::pair<int,int> > &sndcardFdPair);
     void putStateFDs(std::vector<std::pair<int,int> > &sndcardFdPair);
+    bool getDeviceEventFDs();
+    void putDeviceEventFDs();
+    void checkEventState(int fd, int index);
 
 public:
     AudioDaemon();
@@ -62,6 +82,11 @@ public:
 
 private:
     std::vector<std::pair<int,int> > mSndCardFd;
+
+    //file descriptors for audio device events and their statuses
+    std::vector<std::pair<String8, int> > mAudioEvents;
+    std::vector<std::pair<String8, int> > mAudioEventsStatus;
+
 };
 
 }

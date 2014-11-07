@@ -19,11 +19,17 @@
 
 #ifndef QCOM_AUDIO_PLATFORM_H
 #define QCOM_AUDIO_PLATFORM_H
+#include <sound/voice_params.h>
 
 enum {
     FLUENCE_NONE,
     FLUENCE_DUAL_MIC = 0x1,
     FLUENCE_QUAD_MIC = 0x2,
+};
+
+enum {
+    FLUENCE_ENDFIRE = 0x1,
+    FLUENCE_BROADSIDE = 0x2,
 };
 
 /*
@@ -71,6 +77,11 @@ enum {
     SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET,
     SND_DEVICE_OUT_ANC_HANDSET,
     SND_DEVICE_OUT_SPEAKER_PROTECTED,
+#ifdef RECORD_PLAY_CONCURRENCY
+    SND_DEVICE_OUT_VOIP_HANDSET,
+    SND_DEVICE_OUT_VOIP_SPEAKER,
+    SND_DEVICE_OUT_VOIP_HEADPHONES,
+#endif
     SND_DEVICE_OUT_END,
 
     /*
@@ -101,7 +112,9 @@ enum {
     SND_DEVICE_IN_VOICE_HEADSET_MIC,
     SND_DEVICE_IN_HDMI_MIC,
     SND_DEVICE_IN_BT_SCO_MIC,
+    SND_DEVICE_IN_BT_SCO_MIC_NREC,
     SND_DEVICE_IN_BT_SCO_MIC_WB,
+    SND_DEVICE_IN_BT_SCO_MIC_WB_NREC,
     SND_DEVICE_IN_CAMCORDER_MIC,
     SND_DEVICE_IN_VOICE_DMIC,
     SND_DEVICE_IN_VOICE_SPEAKER_DMIC,
@@ -120,6 +133,11 @@ enum {
     SND_DEVICE_IN_HANDSET_STEREO_DMIC,
     SND_DEVICE_IN_SPEAKER_STEREO_DMIC,
     SND_DEVICE_IN_CAPTURE_VI_FEEDBACK,
+    SND_DEVICE_IN_VOICE_SPEAKER_DMIC_BROADSIDE,
+    SND_DEVICE_IN_SPEAKER_DMIC_BROADSIDE,
+    SND_DEVICE_IN_SPEAKER_DMIC_AEC_BROADSIDE,
+    SND_DEVICE_IN_SPEAKER_DMIC_NS_BROADSIDE,
+    SND_DEVICE_IN_SPEAKER_DMIC_AEC_NS_BROADSIDE,
     SND_DEVICE_IN_END,
 
     SND_DEVICE_MAX = SND_DEVICE_IN_END,
@@ -150,6 +168,10 @@ enum {
 #define DEEP_BUFFER_OUTPUT_PERIOD_COUNT 4
 #define LOW_LATENCY_OUTPUT_PERIOD_SIZE 240
 #define LOW_LATENCY_OUTPUT_PERIOD_COUNT 2
+
+#define LOW_LATENCY_CAPTURE_SAMPLE_RATE 48000
+#define LOW_LATENCY_CAPTURE_PERIOD_SIZE 240
+#define LOW_LATENCY_CAPTURE_USE_CASE 0
 
 #define HDMI_MULTI_PERIOD_SIZE  336
 #define HDMI_MULTI_PERIOD_COUNT 8
@@ -205,6 +227,7 @@ typedef int (*start_voice_t)(uint32_t);
 typedef int (*stop_voice_t)(uint32_t);
 typedef int (*start_playback_t)(uint32_t);
 typedef int (*stop_playback_t)(uint32_t);
+typedef int (*set_lch_t)(uint32_t, enum voice_lch_mode);
 typedef int (*start_record_t)(uint32_t, int);
 typedef int (*stop_record_t)(uint32_t);
 /* CSD Client structure */
@@ -222,6 +245,7 @@ struct csd_data {
     stop_voice_t stop_voice;
     start_playback_t start_playback;
     stop_playback_t stop_playback;
+    set_lch_t set_lch;
     start_record_t start_record;
     stop_record_t stop_record;
 };

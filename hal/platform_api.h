@@ -19,6 +19,10 @@
 
 #ifndef AUDIO_PLATFORM_API_H
 #define AUDIO_PLATFORM_API_H
+#include <sound/voice_params.h>
+
+#define CODEC_BACKEND_DEFAULT_BIT_WIDTH 16
+#define CODEC_BACKEND_DEFAULT_SAMPLE_RATE 48000
 
 void *platform_init(struct audio_device *adev);
 void platform_deinit(void *platform);
@@ -31,7 +35,10 @@ int platform_get_snd_device_index(char *snd_device_index_name);
 int platform_set_fluence_type(void *platform, char *value);
 int platform_get_fluence_type(void *platform, char *value, uint32_t len);
 int platform_set_snd_device_acdb_id(snd_device_t snd_device, unsigned int acdb_id);
-int platform_send_audio_calibration(void *platform, snd_device_t snd_device);
+int platform_get_snd_device_acdb_id(snd_device_t snd_device);
+int platform_send_audio_calibration(void *platform, snd_device_t snd_device,
+                                    int app_type, int sample_rate);
+int platform_get_default_app_type(void *platform);
 int platform_switch_voice_call_device_pre(void *platform);
 int platform_switch_voice_call_enable_device_config(void *platform,
                                                     snd_device_t out_snd_device,
@@ -60,11 +67,19 @@ int platform_set_incall_recording_session_id(void *platform, uint32_t session_id
 int platform_stop_incall_recording_usecase(void *platform);
 int platform_start_incall_music_usecase(void *platform);
 int platform_stop_incall_music_usecase(void *platform);
+int platform_update_lch(void *platform, struct voice_session *session,
+                        enum voice_lch_mode lch_mode);
 /* returns the latency for a usecase in Us */
 int64_t platform_render_latency(audio_usecase_t usecase);
 int platform_update_usecase_from_source(int source, audio_usecase_t usecase);
 
-bool platform_listen_update_status(snd_device_t snd_device);
+bool platform_listen_device_needs_event(snd_device_t snd_device);
+bool platform_listen_usecase_needs_event(audio_usecase_t uc_id);
+
+bool platform_sound_trigger_device_needs_event(snd_device_t snd_device);
+bool platform_sound_trigger_usecase_needs_event(audio_usecase_t uc_id);
+
+int platform_set_snd_device_backend(snd_device_t snd_device, const char * backend);
 
 /* From platform_info_parser.c */
 int platform_info_init(const char *filename);
@@ -72,5 +87,10 @@ int platform_info_init(const char *filename);
 struct audio_offload_info_t;
 uint32_t platform_get_compress_offload_buffer_size(audio_offload_info_t* info);
 uint32_t platform_get_pcm_offload_buffer_size(audio_offload_info_t* info);
+
+bool platform_check_and_set_codec_backend_cfg(struct audio_device* adev, struct audio_usecase *usecase);
+int platform_get_usecase_index(const char * usecase);
+int platform_set_usecase_pcm_id(audio_usecase_t usecase, int32_t type, int32_t pcm_id);
+void platform_set_echo_reference(void *platform, bool enable);
 
 #endif // AUDIO_PLATFORM_API_H

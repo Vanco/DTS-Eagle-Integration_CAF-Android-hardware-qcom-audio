@@ -1,5 +1,5 @@
 /* hfp.c
-Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -45,6 +45,12 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 #define AUDIO_PARAMETER_HFP_SET_SAMPLING_RATE "hfp_set_sampling_rate"
 #define AUDIO_PARAMETER_KEY_HFP_VOLUME "hfp_volume"
 
+#ifdef PLATFORM_MSM8994
+#define HFP_RX_VOLUME     "SEC AUXPCM LOOPBACK Volume"
+#else
+#define HFP_RX_VOLUME     "Internal HFP RX Volume"
+#endif
+
 static int32_t start_hfp(struct audio_device *adev,
                                struct str_parms *parms);
 
@@ -84,11 +90,12 @@ static int32_t hfp_set_volume(struct audio_device *adev, float value)
 {
     int32_t vol, ret = 0;
     struct mixer_ctl *ctl;
-    const char *mixer_ctl_name = "Internal HFP RX Volume";
+    const char *mixer_ctl_name = HFP_RX_VOLUME;
 
     ALOGV("%s: entry", __func__);
     ALOGD("%s: (%f)\n", __func__, value);
 
+    hfpmod.hfp_volume = value;
     if (value < 0.0) {
         ALOGW("%s: (%f) Under 0.0, assuming 0.0\n", __func__, value);
         value = 0.0;
@@ -97,7 +104,6 @@ static int32_t hfp_set_volume(struct audio_device *adev, float value)
         ALOGW("%s: Volume brought with in range (%f)\n", __func__, value);
     }
     vol  = lrint((value * 0x2000) + 0.5);
-    hfpmod.hfp_volume = value;
 
     if (!hfpmod.is_hfp_running) {
         ALOGV("%s: HFP not active, ignoring set_hfp_volume call", __func__);
@@ -121,7 +127,7 @@ static int32_t hfp_set_volume(struct audio_device *adev, float value)
 }
 
 static int32_t start_hfp(struct audio_device *adev,
-                               struct str_parms *parms)
+                         struct str_parms *parms __unused)
 {
     int32_t i, ret = 0;
     struct audio_usecase *uc_info;
@@ -130,6 +136,10 @@ static int32_t start_hfp(struct audio_device *adev,
     ALOGD("%s: enter", __func__);
 
     uc_info = (struct audio_usecase *)calloc(1, sizeof(struct audio_usecase));
+
+    if (!uc_info)
+        return -ENOMEM;
+
     uc_info->id = hfpmod.ucid;
     uc_info->type = PCM_HFP_CALL;
     uc_info->stream.out = adev->primary_output;
@@ -194,10 +204,26 @@ static int32_t start_hfp(struct audio_device *adev,
         ret = -EIO;
         goto exit;
     }
-    pcm_start(hfpmod.hfp_sco_rx);
-    pcm_start(hfpmod.hfp_sco_tx);
-    pcm_start(hfpmod.hfp_pcm_rx);
-    pcm_start(hfpmod.hfp_pcm_tx);
+    if (pcm_start(hfpmod.hfp_sco_rx) < 0) {
+        ALOGE("%s: pcm start for hfp sco rx failed", __func__);
+        ret = -EINVAL;
+        goto exit;
+    }
+    if (pcm_start(hfpmod.hfp_sco_tx) < 0) {
+        ALOGE("%s: pcm start for hfp sco tx failed", __func__);
+        ret = -EINVAL;
+        goto exit;
+    }
+    if (pcm_start(hfpmod.hfp_pcm_rx) < 0) {
+        ALOGE("%s: pcm start for hfp pcm rx failed", __func__);
+        ret = -EINVAL;
+        goto exit;
+    }
+    if (pcm_start(hfpmod.hfp_pcm_tx) < 0) {
+        ALOGE("%s: pcm start for hfp pcm tx failed", __func__);
+        ret = -EINVAL;
+        goto exit;
+    }
 
     hfpmod.is_hfp_running = true;
     hfp_set_volume(adev, hfpmod.hfp_volume);
@@ -244,12 +270,15 @@ static int32_t stop_hfp(struct audio_device *adev)
         return -EINVAL;
     }
 
-    /* 2. Get and set stream specific mixer controls */
-    disable_audio_route(adev, uc_info, true);
+    /* 2. Disable echo reference while stopping hfp */
+    platform_set_echo_reference(adev->platform, false);
 
-    /* 3. Disable the rx and tx devices */
-    disable_snd_device(adev, uc_info->out_snd_device, false);
-    disable_snd_device(adev, uc_info->in_snd_device, true);
+    /* 3. Get and set stream specific mixer controls */
+    disable_audio_route(adev, uc_info);
+
+    /* 4. Disable the rx and tx devices */
+    disable_snd_device(adev, uc_info->out_snd_device);
+    disable_snd_device(adev, uc_info->in_snd_device);
 
     list_remove(&uc_info->list);
     free(uc_info);
@@ -285,7 +314,7 @@ void audio_extn_hfp_set_parameters(struct audio_device *adev, struct str_parms *
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_HFP_ENABLE, value,
                             sizeof(value));
     if (ret >= 0) {
-           if(!strncmp(value,"true",sizeof(value)))
+           if (!strncmp(value,"true",sizeof(value)))
                ret = start_hfp(adev,parms);
            else
                stop_hfp(adev);
@@ -298,22 +327,20 @@ void audio_extn_hfp_set_parameters(struct audio_device *adev, struct str_parms *
            if (rate == 8000){
                hfpmod.ucid = USECASE_AUDIO_HFP_SCO;
                pcm_config_hfp.rate = rate;
-           }
-           else if (rate == 16000){
+           } else if (rate == 16000){
                hfpmod.ucid = USECASE_AUDIO_HFP_SCO_WB;
                pcm_config_hfp.rate = rate;
-           }
-           else
+           } else
                ALOGE("Unsupported rate..");
     }
 
-    if(hfpmod.is_hfp_running) {
+    if (hfpmod.is_hfp_running) {
         memset(value, 0, sizeof(value));
         ret = str_parms_get_str(parms, AUDIO_PARAMETER_STREAM_ROUTING,
                                 value, sizeof(value));
         if (ret >= 0) {
             val = atoi(value);
-            if(val > 0)
+            if (val > 0)
                 select_devices(adev, hfpmod.ucid);
         }
     }
