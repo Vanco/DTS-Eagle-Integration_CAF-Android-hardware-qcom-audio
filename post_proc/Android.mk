@@ -13,14 +13,9 @@ LOCAL_SRC_FILES:= \
 	bass_boost.c \
 	virtualizer.c \
 	reverb.c \
-	effect_api.c \
-	effect_util.c
+	effect_api.c
 
 LOCAL_CFLAGS+= -O2 -fvisibility=hidden
-
-ifneq ($(strip $(AUDIO_FEATURE_DISABLED_DTS_EAGLE)),true)
-    LOCAL_CFLAGS += -DDTS_EAGLE
-endif
 
 LOCAL_SHARED_LIBRARIES := \
 	libcutils \
